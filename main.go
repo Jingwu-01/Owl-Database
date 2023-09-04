@@ -1,9 +1,10 @@
 // This file is a skeleton for your project. You should replace this
 // comment with true documentation.
-
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,7 +17,21 @@ func main() {
 	var port int
 	var err error
 
-	// Your code goes here.
+	// Initialize flags
+	portFlag := flag.Int("p", 3318, "Port number")
+	schemaFlag := flag.String("s", "", "Schema file name")
+	tokenFlag := flag.String("t", "", "Token file name")
+
+	flag.Parse()
+
+	port = *portFlag
+
+	if *schemaFlag == "" {
+		slog.Error("Missing schema", "error")
+		return
+	}
+
+	fmt.Print(tokenFlag)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
