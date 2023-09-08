@@ -41,7 +41,7 @@ func main() {
 	}
 
 	fmt.Println(tokenFlag)
-	fmt.Println(schema)
+	fmt.Println(schema.Location)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
