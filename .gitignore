@@ -22,3 +22,6 @@ go.work
 
 # Mac
 .DS_Store
+
+# JSONs created for testing
+.json

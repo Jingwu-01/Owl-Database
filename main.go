@@ -10,9 +10,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 func main() {
+	var schema *jsonschema.Schema
 	var server http.Server
 	var port int
 	var err error
@@ -31,7 +34,14 @@ func main() {
 		return
 	}
 
-	fmt.Print(tokenFlag)
+	schema, err = jsonschema.Compile(*schemaFlag)
+
+	if err != nil {
+		slog.Error("Invalid schema", "error", err)
+	}
+
+	fmt.Println(tokenFlag)
+	fmt.Println(schema)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
