@@ -64,7 +64,6 @@ which is sorted by document name.
 */
 type collection struct {
 	documents map[string]document
-	mu        sync.Mutex
 }
 
 /*
@@ -81,7 +80,6 @@ type docoutput struct {
 type document struct {
 	output   docoutput
 	children map[string]collection
-	mu       sync.Mutex
 }
 
 // A dbhandler is the highest level struct, holds all the collections and
@@ -101,53 +99,134 @@ func NewDBHandler() dbhandler {
 func (d *dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		path, found := strings.CutPrefix(r.URL.Path, "/v1/")
-
-		// Check for version
-		if !found {
-			slog.Info("User path did not include version", "path", path)
-			msg := fmt.Sprintf("path missing version: %s", path)
-			http.Error(w, msg, http.StatusBadRequest)
-		}
-
-		splitpath := strings.SplitAfterN(path, "/", 2)
-		dbpath := splitpath[0]
-
-		d.mu.Lock()
-		database, ok := d.databases[dbpath]
-		d.mu.Unlock()
-
-		// Check to see if database exists
-		if !ok {
-			slog.Info("User attempted to access non-extant database", "path", path)
-			msg := fmt.Sprintf("Invalid database: %s", path)
-			http.Error(w, msg, http.StatusBadRequest)
-		}
-
-		if len(splitpath) == 1 {
-			// GET database case
-			fmt.Printf("database.documents: %v\n", database.documents)
-		} else {
-			// GET document/collection case
-			path = splitpath[1]
-			fmt.Printf(path)
-		}
+		d.Get(w, r)
 	case http.MethodPut:
-		// Put handling
+		d.Put(w, r)
 	//case http.MethodPost:
 	// Post handling
 	//case http.MethodPatch:
 	// Patch handling
 	//case http.MethodDelete:
 	// Delete handling
-	//case http.MethodOptions:
-	// Options handling
+	case http.MethodOptions:
+		d.Options(w, r)
 	default:
 		// If user used method we do not support.
 		slog.Info("User used unsupported method", "method", r.Method)
 		msg := fmt.Sprintf("unsupported method: %s", r.Method)
 		http.Error(w, msg, http.StatusBadRequest)
 	}
+}
+
+// Handles case where we recieve a GET request.
+func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
+	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+
+	// Check for version
+	if !found {
+		slog.Info("User path did not include version", "path", r.URL.Path)
+		msg := fmt.Sprintf("path missing version: %s", r.URL.Path)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	splitpath := strings.SplitAfterN(path, "/", 2)
+
+	if len(splitpath) == 1 {
+		// Error, DB path does not end with "/"
+		slog.Info("DB path did not end with \"/\"", "path", r.URL.Path)
+		msg := fmt.Sprintf("path missing trailing '/': %s", r.URL.Path)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	} else if splitpath[1] == "" {
+		// GET Database
+		dbpath := splitpath[0]
+
+		// Access the database
+		d.mu.Lock()
+		database, ok := d.databases[dbpath]
+		d.mu.Unlock()
+
+		// Check to see if database exists
+		if !ok {
+			slog.Info("User attempted to access non-extant database", "db", dbpath)
+			msg := fmt.Sprintf("Invalid database: %s", dbpath)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		// Just to remove database not used error
+		fmt.Println(database.documents)
+	} else {
+		// GET Document or Collection
+		dbpath := splitpath[0]
+		path = splitpath[1]
+
+		// Access the database
+		d.mu.Lock()
+		database, ok := d.databases[dbpath]
+		d.mu.Unlock()
+
+		// Check to see if database exists
+		if !ok {
+			slog.Info("User attempted to access non-extant database", "db", dbpath)
+			msg := fmt.Sprintf("Invalid database: %s", dbpath)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		// Just to remove database not used error
+		fmt.Println(database.documents)
+	}
+}
+
+// Handles case where we have PUT request.
+func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
+	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+
+	// Check for version
+	if !found {
+		slog.Info("User path did not include version", "path", path)
+		msg := fmt.Sprintf("path missing version: %s", path)
+		http.Error(w, msg, http.StatusBadRequest)
+	}
+
+	splitpath := strings.SplitAfterN(path, "/", 2)
+
+	if len(splitpath) == 1 {
+		// PUT database case
+		dbpath := splitpath[0]
+		fmt.Println(dbpath)
+	} else {
+		// PUT document or collection
+		dbpath := splitpath[0]
+		path = splitpath[1]
+
+		// Access the database
+		d.mu.Lock()
+		database, ok := d.databases[dbpath]
+		d.mu.Unlock()
+
+		// Check to see if database exists
+		if !ok {
+			slog.Info("User attempted to access non-extant database", "db", dbpath)
+			msg := fmt.Sprintf("Invalid database: %s", dbpath)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		// Just to remove database not used error
+		fmt.Println(database.documents)
+	}
+}
+
+// Handles case where we have OPTIONS request.
+func (d *dbhandler) Options(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Allow", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
+	w.WriteHeader(http.StatusOK)
 }
 
 // Implements the main functionality for the OwlDB program.
