@@ -63,7 +63,7 @@ A collection is a concurrent skip list of documents,
 which is sorted by document name.
 */
 type collection struct {
-	documents map[string]document
+	documents sync.Map
 }
 
 /*
@@ -79,19 +79,18 @@ type docoutput struct {
 // A document is a document plus a concurrent skip list of collections
 type document struct {
 	output   docoutput
-	children map[string]collection
+	children sync.Map
 }
 
 // A dbhandler is the highest level struct, holds all the collections and
 // handles all the http requests.
 type dbhandler struct {
-	databases map[string]collection
-	mu        sync.Mutex
+	databases sync.Map
 }
 
 // Creates a new DBHandler
 func NewDBHandler() dbhandler {
-	return dbhandler{make(map[string]collection), sync.Mutex{}}
+	return dbhandler{sync.Map{}}
 }
 
 // The server implements the "handler" interface, it will recieve
@@ -143,9 +142,7 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		dbpath := splitpath[0]
 
 		// Access the database
-		d.mu.Lock()
-		database, ok := d.databases[dbpath]
-		d.mu.Unlock()
+		database, ok := d.databases.Load(dbpath)
 
 		// Check to see if database exists
 		if !ok {
@@ -156,16 +153,14 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Just to remove database not used error
-		fmt.Println(database.documents)
+		fmt.Println(database)
 	} else {
 		// GET Document or Collection
 		dbpath := splitpath[0]
 		path = splitpath[1]
 
 		// Access the database
-		d.mu.Lock()
-		database, ok := d.databases[dbpath]
-		d.mu.Unlock()
+		database, ok := d.databases.Load(dbpath)
 
 		// Check to see if database exists
 		if !ok {
@@ -176,7 +171,7 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Just to remove database not used error
-		fmt.Println(database.documents)
+		fmt.Println(database)
 	}
 }
 
@@ -203,9 +198,7 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		path = splitpath[1]
 
 		// Access the database
-		d.mu.Lock()
-		database, ok := d.databases[dbpath]
-		d.mu.Unlock()
+		database, ok := d.databases.Load(dbpath)
 
 		// Check to see if database exists
 		if !ok {
@@ -216,7 +209,7 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Just to remove database not used error
-		fmt.Println(database.documents)
+		fmt.Println(database)
 	}
 }
 
