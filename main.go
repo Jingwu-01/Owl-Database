@@ -27,6 +27,12 @@ The flags are:
 		A token file name, the file contains a JSON mapping user names
 		to string tokens. These tokens will be installed on the system
 		for 24 hours.
+	-d
+		An integer, logger output level, 1 for errors only, -1 for debug
+		as well as all other info.
+	-i
+		A bool flag - include to have a default set of databases added to
+		the server.
 
 When a client connects to the OwlDB server, they will be given a unique
 token which they will use on all future logins. They will have the power
