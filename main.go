@@ -27,7 +27,7 @@ The flags are:
 		A token file name, the file contains a JSON mapping user names
 		to string tokens. These tokens will be installed on the system
 		for 24 hours.
-	-d
+	-l
 		An integer, logger output level, 1 for errors only, -1 for debug
 		as well as all other info.
 	-i
@@ -42,6 +42,7 @@ server, as well as adding new ones, and subscribing to changes.
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -139,13 +140,21 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	if len(splitpath) == 1 {
 		// Error, DB path does not end with "/"
-		slog.Info("DB path did not end with \"/\"", "path", r.URL.Path)
+		slog.Info("DB path did not end with '/'", "path", r.URL.Path)
 		msg := fmt.Sprintf("path missing trailing '/': %s", r.URL.Path)
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	} else if splitpath[1] == "" {
 		// GET Database
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
+		dbpath, err := percentDecoding(dbpath)
+
+		// Error messages printed in percentDecoding function
+		if err != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -163,7 +172,15 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// GET Document or Collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
+		dbpath, err := percentDecoding(dbpath)
 		path = splitpath[1]
+
+		// Error messages printed in percentDecoding function
+		if err != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -196,12 +213,27 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	if len(splitpath) == 1 {
 		// PUT database case
-		dbpath := splitpath[0]
+		dbpath, err := percentDecoding(splitpath[0])
+
+		// Error messages printed in percentDecoding function
+		if err != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
 		fmt.Println(dbpath)
 	} else {
 		// PUT document or collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
+		dbpath, err := percentDecoding(dbpath)
 		path = splitpath[1]
+
+		// Error messages printed in percentDecoding function
+		if err != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -216,6 +248,49 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 
 		// Just to remove database not used error
 		fmt.Println(database)
+	}
+}
+
+// Translates a string with percentages into the proper string.
+func percentDecoding(input string) (string, error) {
+	// Finds the first index of a %
+	substrs := strings.Split(input, "%")
+	fmt.Println(substrs)
+
+	if len(substrs) == 1 {
+		return input, nil
+	} else {
+		// Initialize i and retval
+		i := 1
+		retval := substrs[0]
+
+		for i < len(substrs) {
+			// Split substr[i] into characters
+			chars := strings.Split(substrs[i], "")
+
+			// Ensure we have 2 characters following a percentage.
+			if len(chars) < 2 {
+				slog.Error("Not enough characters following %", "number", len(chars))
+				return "", errors.New("Not enough characters following %")
+			}
+
+			// Translate the characters into their ASCII representation
+			trans, err := hex.DecodeString(chars[0] + chars[1])
+			if err != nil {
+				slog.Error("Error converting hex to string", "error", err, "str", chars[0]+chars[1])
+				return "", errors.New("Error converting hex to string")
+			}
+
+			// Add the rest of the string to retval
+			retval = retval + string(trans)
+			j := 2
+			for j < len(chars) {
+				retval = retval + chars[j]
+				j++
+			}
+			i++
+		}
+		return retval, nil
 	}
 }
 
