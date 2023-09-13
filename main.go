@@ -63,7 +63,7 @@ A collection is a concurrent skip list of documents,
 which is sorted by document name.
 */
 type collection struct {
-	documents sync.Map
+	documents *sync.Map
 }
 
 /*
@@ -79,18 +79,18 @@ type docoutput struct {
 // A document is a document plus a concurrent skip list of collections
 type document struct {
 	output   docoutput
-	children sync.Map
+	children *sync.Map
 }
 
 // A dbhandler is the highest level struct, holds all the collections and
 // handles all the http requests.
 type dbhandler struct {
-	databases sync.Map
+	databases *sync.Map
 }
 
 // Creates a new DBHandler
 func NewDBHandler() dbhandler {
-	return dbhandler{sync.Map{}}
+	return dbhandler{&sync.Map{}}
 }
 
 // The server implements the "handler" interface, it will recieve
