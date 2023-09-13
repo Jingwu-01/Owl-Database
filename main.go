@@ -139,7 +139,7 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if splitpath[1] == "" {
 		// GET Database
-		dbpath := splitpath[0]
+		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -156,7 +156,7 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(database)
 	} else {
 		// GET Document or Collection
-		dbpath := splitpath[0]
+		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
 		path = splitpath[1]
 
 		// Access the database
@@ -194,7 +194,7 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(dbpath)
 	} else {
 		// PUT document or collection
-		dbpath := splitpath[0]
+		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
 		path = splitpath[1]
 
 		// Access the database
@@ -225,15 +225,16 @@ func (d *dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 // Implements the main functionality for the OwlDB program.
 func main() {
 	// Declare variables for main method.
+	var port int
 	var schema *jsonschema.Schema
 	var tknPath string
+	var testMode bool
+	var err error
 	var server http.Server
 	var handler dbhandler
-	var port int
-	var err error
 
 	// Initialize the user input variables.
-	port, schema, tknPath, err = initialize()
+	port, schema, tknPath, testMode, err = initialize()
 
 	// Printing was handled in initialize.
 	if err != nil {
@@ -244,8 +245,14 @@ func main() {
 	server.Addr = fmt.Sprintf("localhost:%d", port)
 	server.Handler = &handler
 
-	fmt.Println(tknPath)
-	fmt.Println(schema.Location)
+	if testMode {
+		handler.databases.Store("db1", collection{})
+		handler.databases.Store("db2", collection{})
+	}
+
+	// Remove errors of not used
+	slog.Info("Input token path", "tokenpath", tknPath)
+	slog.Info("Schema input", "schema", schema)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
@@ -274,28 +281,29 @@ func main() {
 // the input schema file into a jsonschema.Schema object.
 // Returns the port number, schema object, and the token
 // file's path.
-func initialize() (int, *jsonschema.Schema, string, error) {
+func initialize() (int, *jsonschema.Schema, string, bool, error) {
 	// Initialize flags
 	portFlag := flag.Int("p", 3318, "Port number")
 	schemaFlag := flag.String("s", "", "Schema file name")
 	tokenFlag := flag.String("t", "", "Token file name")
 	loggerFlag := flag.Int("l", 0, "Logger output level, -1 for debug, 1 for only errors")
+	testFlag := flag.Bool("i", false, "true to initialize a default database for testing")
 	flag.Parse()
 
 	// Ensure we got a schema file
 	if *schemaFlag == "" {
 		slog.Error("Missing schema", "error", errors.New("Missing schema"))
-		return 0, nil, "", errors.New("Missing Schema")
+		return 0, nil, "", false, errors.New("Missing Schema")
 	}
 
-	// Compile the schema
-	schema, err := jsonschema.Compile(*schemaFlag)
+	// // Compile the schema
+	// schema, err := jsonschema.Compile(*schemaFlag)
 
-	// Check for errors.
-	if err != nil {
-		slog.Error("Invalid schema", "error", err)
-		return 0, nil, "", errors.New("Invalid schema")
-	}
+	// // Check for errors.
+	// if err != nil {
+	// 	slog.Error("Invalid schema", "error", err)
+	// 	return 0, nil, "", false, errors.New("Invalid schema")
+	// }
 
 	// Set to debug and above
 	if *loggerFlag == -1 {
@@ -309,5 +317,5 @@ func initialize() (int, *jsonschema.Schema, string, error) {
 		slog.SetDefault(slog.New(h))
 	}
 
-	return *portFlag, schema, *tokenFlag, nil
+	return *portFlag, nil, *tokenFlag, *testFlag, nil
 }
