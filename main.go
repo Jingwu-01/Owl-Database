@@ -62,10 +62,10 @@ import (
 
 // A meta stores metadata about a document.
 type meta struct {
-	createdBy      string
-	createdAt      int64
-	lastModifiedBy string
-	lastModifiedAt int64
+	CreatedBy      string
+	CreatedAt      int64
+	LastModifiedBy string
+	LastModifiedAt int64
 }
 
 /*
@@ -81,9 +81,9 @@ A docoutput is a struct which represents the data to
 be output when a user requests a given document.
 */
 type docoutput struct {
-	path     string
-	meta     meta
-	contents []byte
+	Path     string
+	Meta     meta
+	Contents map[string]interface{}
 }
 
 // A document is a document plus a concurrent skip list of collections
@@ -131,7 +131,6 @@ func (d *dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	returnDocs := make([]docoutput, 0)
 
 	// Check for version
 	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
@@ -176,13 +175,25 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		slog.Info("", "foo", (database == nil))
+		returnDocs := make([]docoutput, 0)
 
-		// Just add each docoutput to the docoutputs list
+		// Add each docoutput to the docoutputs list
 		database.(collection).documents.Range(func(key, value interface{}) bool {
 			returnDocs = append(returnDocs, value.(document).output)
 			return true
 		})
+
+		// Convert to JSON and send
+		jsonToDo, err := json.Marshal(returnDocs)
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		w.Write(jsonToDo)
+		slog.Info("GET: success")
+
 	} else {
 		// GET Document or Collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
@@ -216,24 +227,26 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
-		returnDocs = append(returnDocs, doc.(document).output)
-	}
 
-	// Should not be any errors if control reached here
-	// Send docoutput out
-	jsonToDo, err := json.Marshal(returnDocs)
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
+		// Convert to JSON and send
+		jsonToDo, err := json.Marshal(doc.(document).output)
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		w.Write(jsonToDo)
+		slog.Info("GET: success")
 	}
-	w.Write(jsonToDo)
-	slog.Info("GET: success")
 }
 
 // Handles case where we have PUT request.
 func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
+	// Set headers of response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
 
 	// Check for version
@@ -256,18 +269,15 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Set headers of response
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
 		_, loaded := d.databases.LoadOrStore(dbpath, collection{&sync.Map{}})
 		if loaded {
-			slog.Info("Created Database", "path", dbpath)
-			w.WriteHeader(http.StatusCreated)
-		} else {
 			slog.Error("Database already exists")
 			http.Error(w, "Database already exists", http.StatusBadRequest)
+			return
+		} else {
+			slog.Info("Created Database", "path", dbpath)
+			w.WriteHeader(http.StatusCreated)
 			return
 		}
 
@@ -291,13 +301,9 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
 			msg := fmt.Sprintf("Invalid database: %s", dbpath)
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
-
-		// Set headers of response
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		// Read body of requests
 		desc, err := io.ReadAll(r.Body)
@@ -308,37 +314,45 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Convert request into a document
-		var docOutput docoutput
-		err = json.Unmarshal(desc, &docOutput.contents)
+		// Read Body data
+		var docBody map[string]interface{}
+		err = json.Unmarshal(desc, &docBody)
 		if err != nil {
 			slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
 			http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
 			return
 		}
-		docOutput.path = path
-		docOutput.meta = meta{"username", time.Now().UnixMilli(), "username", time.Now().UnixMilli()}
 
-		// Assert that db is a collection
-		db := database.(collection)
+		// Either modify or create a new document
+		existingDoc, exists := database.(collection).documents.Load(path)
+		if exists {
+			// Need to modify metadata
+			var modifiedDoc = existingDoc.(document)
+			existingDocOutput := modifiedDoc.output
+			existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
+			existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
 
-		// Add the new document to the given path. If already exists, modify the document.
-		_, loaded := db.documents.LoadOrStore(path, document{docOutput, nil})
-		if loaded {
-			slog.Info("Created new document", "path", path)
-			w.WriteHeader(http.StatusCreated)
-		} else {
-			existingDoc, _ := db.documents.Load(path)
-			exDoc := existingDoc.(document)
-			existingDocOutput := exDoc.output
+			// Modify document contents
+			existingDocOutput.Contents = docBody
 
-			err = json.Unmarshal(desc, &existingDocOutput.contents)
-			existingDocOutput.meta.lastModifiedAt = time.Now().UnixMilli()
-			existingDocOutput.meta.lastModifiedBy = "newUser"
+			// Modify it again in the doc
+			modifiedDoc.output = existingDocOutput
+			database.(collection).documents.Store(path, modifiedDoc)
 
 			slog.Info("Overwrited an old document", "path", path)
 			w.WriteHeader(http.StatusOK)
+		} else {
+			// Create a new document
+			var docOutput docoutput
+			docOutput.Path = path
+			docOutput.Contents = docBody
+			docOutput.Meta = meta{"DUMMY USER", time.Now().UnixMilli(), "DUMMY USER", time.Now().UnixMilli()}
+
+			database.(collection).documents.Store(path, document{docOutput, nil})
+			slog.Info("Created new document", "path", path)
+			w.WriteHeader(http.StatusCreated)
 		}
+
 	}
 }
 
@@ -346,7 +360,6 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 func percentDecoding(input string) (string, error) {
 	// Finds the first index of a %
 	substrs := strings.Split(input, "%")
-	fmt.Println(substrs)
 
 	if len(substrs) == 1 {
 		return input, nil
