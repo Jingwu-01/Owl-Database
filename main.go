@@ -176,6 +176,8 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		slog.Info("", "foo", (database == nil))
+
 		// Just add each docoutput to the docoutputs list
 		database.(collection).documents.Range(func(key, value interface{}) bool {
 			returnDocs = append(returnDocs, value.(document).output)
@@ -416,8 +418,11 @@ func main() {
 	server.Handler = &handler
 
 	if testMode {
-		handler.databases.Store("db1", collection{})
-		handler.databases.Store("db2", collection{})
+		slog.Info("Test mode enabled", "INFO", 0)
+
+		// The current test cases will have
+		handler.databases.Store("db1", collection{&sync.Map{}})
+		handler.databases.Store("db2", collection{&sync.Map{}})
 	}
 
 	// Remove errors of not used
