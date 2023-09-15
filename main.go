@@ -221,7 +221,21 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
-		fmt.Println(dbpath)
+
+		// Should start from here
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		_, loaded := d.databases.LoadOrStore(dbpath, collection{&sync.Map{}})
+		if loaded {
+			slog.Info("createDatabase", "path", dbpath)
+			w.WriteHeader(http.StatusCreated)
+		} else {
+			slog.Error("Database already exists")
+			http.Error(w, `"Database already exists"`, http.StatusBadRequest)
+			return
+		}
+
 	} else {
 		// PUT document or collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
@@ -246,8 +260,9 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Just to remove database not used error
+		// Should start from here
 		fmt.Println(database)
+
 	}
 }
 
