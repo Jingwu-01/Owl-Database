@@ -43,6 +43,7 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -126,9 +127,12 @@ func (d *dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Handles case where we recieve a GET request.
 func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
-	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	returnDocs := make([]docoutput, 0)
 
 	// Check for version
+	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
 	if !found {
 		slog.Info("User path did not include version", "path", r.URL.Path)
 		msg := fmt.Sprintf("path missing version: %s", r.URL.Path)
@@ -136,8 +140,11 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Action fork for GET Database and GET Document
+	// Only compliant for check-in.
+	// Checkpoint 1 heirarchy
+	// dbhandler -> databases (map) -> collection -> documents (map) -> document -> docoutput (metadata, path, contents)
 	splitpath := strings.SplitAfterN(path, "/", 2)
-
 	if len(splitpath) == 1 {
 		// Error, DB path does not end with "/"
 		slog.Info("DB path did not end with '/'", "path", r.URL.Path)
@@ -163,12 +170,15 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
 			msg := fmt.Sprintf("Invalid database: %s", dbpath)
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
 
-		// Just to remove database not used error
-		fmt.Println(database)
+		// Just add each docoutput to the docoutputs list
+		database.(collection).documents.Range(func(key, value interface{}) bool {
+			returnDocs = append(returnDocs, value.(document).output)
+			return true
+		})
 	} else {
 		// GET Document or Collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
@@ -189,13 +199,33 @@ func (d *dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
 			msg := fmt.Sprintf("Invalid database: %s", dbpath)
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
 
-		// Just to remove database not used error
-		fmt.Println(database)
+		// Get document
+		// for checkpoint 1, we assume that path will always be a document name
+		doc, ok := database.(collection).documents.Load(path)
+		if !ok {
+			slog.Info("User attempted to access non-extant document", "db", dbpath)
+			msg := fmt.Sprintf("Invalid document: %s", path)
+			http.Error(w, msg, http.StatusNotFound)
+			return
+		}
+		returnDocs = append(returnDocs, doc.(document).output)
 	}
+
+	// Should not be any errors if control reached here
+	// Send docoutput out
+	jsonToDo, err := json.Marshal(returnDocs)
+	if err != nil {
+		// This should never happen
+		slog.Error("Get: error marshaling", "error", err)
+		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonToDo)
+	slog.Info("GET: success")
 }
 
 // Handles case where we have PUT request.
