@@ -47,6 +47,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -54,6 +55,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -61,9 +63,9 @@ import (
 // A meta stores metadata about a document.
 type meta struct {
 	createdBy      string
-	createdAt      int
+	createdAt      int64
 	lastModifiedBy string
-	lastModifiedAt int
+	lastModifiedAt int64
 }
 
 /*
@@ -252,17 +254,18 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Should start from here
+		// Set headers of response
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
 		_, loaded := d.databases.LoadOrStore(dbpath, collection{&sync.Map{}})
 		if loaded {
-			slog.Info("createDatabase", "path", dbpath)
+			slog.Info("Created Database", "path", dbpath)
 			w.WriteHeader(http.StatusCreated)
 		} else {
 			slog.Error("Database already exists")
-			http.Error(w, `"Database already exists"`, http.StatusBadRequest)
+			http.Error(w, "Database already exists", http.StatusBadRequest)
 			return
 		}
 
@@ -290,9 +293,50 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Should start from here
-		fmt.Println(database)
+		// Set headers of response
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		// Read body of requests
+		desc, err := io.ReadAll(r.Body)
+		defer r.Body.Close()
+		if err != nil {
+			slog.Error("Put document: error reading the document request body", "error", err)
+			http.Error(w, `"invalid document format"`, http.StatusBadRequest)
+			return
+		}
+
+		// Convert request into a document
+		var docOutput docoutput
+		err = json.Unmarshal(desc, &docOutput.contents)
+		if err != nil {
+			slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
+			http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
+			return
+		}
+		docOutput.path = path
+		docOutput.meta = meta{"username", time.Now().UnixMilli(), "username", time.Now().UnixMilli()}
+
+		// Assert that db is a collection
+		db := database.(collection)
+
+		// Add the new document to the given path. If already exists, modify the document.
+		_, loaded := db.documents.LoadOrStore(path, document{docOutput, nil})
+		if loaded {
+			slog.Info("Created new document", "path", path)
+			w.WriteHeader(http.StatusCreated)
+		} else {
+			existingDoc, _ := db.documents.Load(path)
+			exDoc := existingDoc.(document)
+			existingDocOutput := exDoc.output
+
+			err = json.Unmarshal(desc, &existingDocOutput.contents)
+			existingDocOutput.meta.lastModifiedAt = time.Now().UnixMilli()
+			existingDocOutput.meta.lastModifiedBy = "newUser"
+
+			slog.Info("Overwrited an old document", "path", path)
+			w.WriteHeader(http.StatusOK)
+		}
 	}
 }
 
