@@ -43,9 +43,11 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -261,7 +263,23 @@ func (d *dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Should start from here
-		fmt.Println(database)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		desc, err := io.ReadAll(r.Body)
+		defer r.Body.Close()
+
+		if err != nil {
+			slog.Error("put database: error reading the document request body", "error", err)
+			http.Error(w, `"invalid document format"`, http.StatusBadRequest)
+			return
+		}
+
+		var doc docoutput
+		_, loaded := d.databases.LoadOrStore(dbpath, collection{&sync.Map{}})
+
+		doc.path = path
+		err = json.Unmarshal(desc, &givenToDo)
 
 	}
 }
