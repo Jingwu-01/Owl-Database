@@ -35,6 +35,7 @@ type collection struct {
 	documents *sync.Map
 }
 
+// Gets a collection
 func (c collection) collectionGet(w http.ResponseWriter, r *http.Request) {
 	returnDocs := make([]docoutput, 0)
 
@@ -56,6 +57,84 @@ func (c collection) collectionGet(w http.ResponseWriter, r *http.Request) {
 	slog.Info("GET: success")
 }
 
+// Puts a document into a collection
+func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path string) {
+	// Assuming paths of length one for now
+	path, err := decoder.PercentDecoding(path)
+
+	// Error messages printed in percentDecoding function
+	if err != nil {
+		msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	// Read body of requests
+	desc, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		slog.Error("Put document: error reading the document request body", "error", err)
+		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
+		return
+	}
+
+	// Read Body data
+	var docBody map[string]interface{}
+	err = json.Unmarshal(desc, &docBody)
+	if err != nil {
+		slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
+		http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
+		return
+	}
+
+	// Either modify or create a new document
+	existingDoc, exists := c.documents.Load(path)
+	if exists {
+		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		// Need to modify metadata
+		var modifiedDoc = existingDoc.(document)
+		existingDocOutput := modifiedDoc.output
+		existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
+		existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
+
+		// Modify document contents
+		existingDocOutput.Doc = docBody
+
+		// Modify it again in the doc
+		modifiedDoc.output = existingDocOutput
+		c.documents.Store(path, modifiedDoc)
+
+		slog.Info("Overwrote an old document", "path", path)
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
+	} else {
+		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		// Create a new document
+		var docOutput docoutput
+		docOutput.Path = "/" + path
+		docOutput.Doc = docBody
+		docOutput.Meta = meta{"DUMMY USER", time.Now().UnixMilli(), "DUMMY USER", time.Now().UnixMilli()}
+
+		c.documents.Store(path, document{docOutput, nil})
+		slog.Info("Created new document", "path", path)
+		w.WriteHeader(http.StatusCreated)
+		w.Write(jsonResponse)
+	}
+
+}
+
 /*
 A docoutput is a struct which represents the data to
 be output when a user requests a given document.
@@ -70,6 +149,22 @@ type docoutput struct {
 type document struct {
 	output   docoutput
 	children *sync.Map
+}
+
+// Gets a document
+func (d document) documentGet(w http.ResponseWriter, r *http.Request) {
+	// Convert to JSON and send
+	jsonDoc, err := json.Marshal(d.output)
+
+	if err != nil {
+		// This should never happen
+		slog.Error("Get: error marshaling", "error", err)
+		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(jsonDoc)
+	slog.Info("GET: success")
 }
 
 // A dbhandler is the highest level struct, holds all the collections and
@@ -200,16 +295,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Convert to JSON and send
-		jsonDoc, err := json.Marshal(doc.(document).output)
-		if err != nil {
-			// This should never happen
-			slog.Error("Get: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-		w.Write(jsonDoc)
-		slog.Info("GET: success")
+		doc.(document).documentGet(w, r)
 	}
 }
 
@@ -279,86 +365,12 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		// Check to see if database exists
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
-			msg := fmt.Sprintf("Invalid database: %s", dbpath)
+			msg := fmt.Sprintf("Database does not exist")
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
 
-		// Assuming paths of length one for now
-		path = splitpath[1]
-		path, err = decoder.PercentDecoding(path)
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
-
-		// Read body of requests
-		desc, err := io.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			slog.Error("Put document: error reading the document request body", "error", err)
-			http.Error(w, `"invalid document format"`, http.StatusBadRequest)
-			return
-		}
-
-		// Read Body data
-		var docBody map[string]interface{}
-		err = json.Unmarshal(desc, &docBody)
-		if err != nil {
-			slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
-			http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
-			return
-		}
-
-		// Either modify or create a new document
-		existingDoc, exists := database.(collection).documents.Load(path)
-		if exists {
-			jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-			if err != nil {
-				// This should never happen
-				slog.Error("Get: error marshaling", "error", err)
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return
-			}
-			// Need to modify metadata
-			var modifiedDoc = existingDoc.(document)
-			existingDocOutput := modifiedDoc.output
-			existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
-			existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
-
-			// Modify document contents
-			existingDocOutput.Doc = docBody
-
-			// Modify it again in the doc
-			modifiedDoc.output = existingDocOutput
-			database.(collection).documents.Store(path, modifiedDoc)
-
-			slog.Info("Overwrote an old document", "path", path)
-			w.WriteHeader(http.StatusOK)
-			w.Write(jsonResponse)
-		} else {
-			jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-			if err != nil {
-				// This should never happen
-				slog.Error("Get: error marshaling", "error", err)
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return
-			}
-			// Create a new document
-			var docOutput docoutput
-			docOutput.Path = "/" + path
-			docOutput.Doc = docBody
-			docOutput.Meta = meta{"DUMMY USER", time.Now().UnixMilli(), "DUMMY USER", time.Now().UnixMilli()}
-
-			database.(collection).documents.Store(path, document{docOutput, nil})
-			slog.Info("Created new document", "path", path)
-			w.WriteHeader(http.StatusCreated)
-			w.Write(jsonResponse)
-		}
-
+		database.(collection).documentPut(w, r, splitpath[1])
 	}
 }
 
