@@ -14,14 +14,6 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
-// A meta stores metadata about a document.
-type meta struct {
-	CreatedBy      string `json:"createdBy"`
-	CreatedAt      int64  `json:"createdAt"`
-	LastModifiedBy string `json:"lastModifiedBy"`
-	LastModifiedAt int64  `json:"lastModifiedAt"`
-}
-
 // A putoutput stores the response to a put request.
 type putoutput struct {
 	Uri string `json:"uri"`
@@ -130,9 +122,18 @@ func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path str
 		c.documents.Store(path, document{docOutput, nil})
 		slog.Info("Created new document", "path", path)
 		w.WriteHeader(http.StatusCreated)
+		w.Header().Set("Location", r.URL.Path)
 		w.Write(jsonResponse)
 	}
 
+}
+
+// A meta stores metadata about a document.
+type meta struct {
+	CreatedBy      string `json:"createdBy"`
+	CreatedAt      int64  `json:"createdAt"`
+	LastModifiedBy string `json:"lastModifiedBy"`
+	LastModifiedAt int64  `json:"lastModifiedAt"`
 }
 
 /*
@@ -312,6 +313,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		slog.Info("User path did not include version", "path", path)
 		msg := fmt.Sprintf("path missing version: %s", path)
 		http.Error(w, msg, http.StatusBadRequest)
+		return
 	}
 
 	splitpath := strings.SplitAfterN(path, "/", 2)
@@ -343,6 +345,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			}
 			slog.Info("Created Database", "path", dbpath)
 			w.WriteHeader(http.StatusCreated)
+			w.Header().Set("Location", r.URL.Path)
 			w.Write(jsonResponse)
 			return
 		}

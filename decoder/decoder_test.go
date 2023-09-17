@@ -12,6 +12,7 @@ func TestPercentDecoder(t *testing.T) {
 		{"hello%20asd", "hello asd"},
 		{"%21as%23ad", "!as#ad"},
 		{"%28a%2fa%23ad", "(a/a#ad"},
+		{"%28a%2Fa%23ad", "(a/a#ad"},
 	}
 
 	for _, d := range data {
