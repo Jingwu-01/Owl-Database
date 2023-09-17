@@ -1,9 +1,7 @@
 package dbhandler
 
 import (
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // A meta stores metadata about a document.
@@ -75,11 +76,12 @@ type document struct {
 // handles all the http requests.
 type Dbhandler struct {
 	databases *sync.Map
+	schema    *jsonschema.Schema
 }
 
 // Creates a new DBHandler
-func New(testmode bool) Dbhandler {
-	retval := Dbhandler{&sync.Map{}}
+func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
+	retval := Dbhandler{&sync.Map{}, schema}
 	if testmode {
 		slog.Info("Test mode enabled", "INFO", 0)
 
@@ -142,12 +144,12 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	} else if splitpath[1] == "" {
 		// GET Database
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := percentDecoding(dbpath)
+		dbpath, err := decoder.PercentDecoding(dbpath)
 
 		// Error messages printed in percentDecoding function
 		if err != nil {
 			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 
@@ -157,7 +159,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		// Check to see if database exists
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
-			msg := fmt.Sprintf("Invalid database: %s", dbpath)
+			msg := fmt.Sprintf("Database does not exist")
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
@@ -167,13 +169,13 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// GET Document
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := percentDecoding(dbpath)
+		dbpath, err := decoder.PercentDecoding(dbpath)
 		path = splitpath[1]
 
 		// Error messages printed in percentDecoding function
 		if err != nil {
 			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 
@@ -183,7 +185,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		// Check to see if database exists
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
-			msg := fmt.Sprintf("Invalid database: %s", dbpath)
+			msg := fmt.Sprintf("Document does not exist")
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
@@ -193,7 +195,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 		doc, ok := database.(collection).documents.Load(path)
 		if !ok {
 			slog.Info("User attempted to access non-extant document", "doc", path)
-			msg := fmt.Sprintf("Invalid document: %s", path)
+			msg := fmt.Sprintf("Document does not exist")
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
@@ -230,12 +232,12 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	if len(splitpath) == 1 {
 		// PUT database case
-		dbpath, err := percentDecoding(splitpath[0])
+		dbpath, err := decoder.PercentDecoding(splitpath[0])
 
 		// Error messages printed in percentDecoding function
 		if err != nil {
 			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
+			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 
@@ -262,7 +264,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// PUT document or collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := percentDecoding(dbpath)
+		dbpath, err := decoder.PercentDecoding(dbpath)
 
 		// Error messages printed in percentDecoding function
 		if err != nil {
@@ -284,7 +286,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 
 		// Assuming paths of length one for now
 		path = splitpath[1]
-		path, err = percentDecoding(path)
+		path, err = decoder.PercentDecoding(path)
 
 		// Error messages printed in percentDecoding function
 		if err != nil {
@@ -357,48 +359,6 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			w.Write(jsonResponse)
 		}
 
-	}
-}
-
-// Translates a string with percentages into the proper string.
-func percentDecoding(input string) (string, error) {
-	// Finds the first index of a %
-	substrs := strings.Split(input, "%")
-
-	if len(substrs) == 1 {
-		return input, nil
-	} else {
-		// Initialize i and retval
-		i := 1
-		retval := substrs[0]
-
-		for i < len(substrs) {
-			// Split substr[i] into characters
-			chars := strings.Split(substrs[i], "")
-
-			// Ensure we have 2 characters following a percentage.
-			if len(chars) < 2 {
-				slog.Error("Not enough characters following %", "number", len(chars))
-				return "", errors.New("Not enough characters following %")
-			}
-
-			// Translate the characters into their ASCII representation
-			trans, err := hex.DecodeString(chars[0] + chars[1])
-			if err != nil {
-				slog.Error("Error converting hex to string", "error", err, "str", chars[0]+chars[1])
-				return "", errors.New("Error converting hex to string")
-			}
-
-			// Add the rest of the string to retval
-			retval = retval + string(trans)
-			j := 2
-			for j < len(chars) {
-				retval = retval + chars[j]
-				j++
-			}
-			i++
-		}
-		return retval, nil
 	}
 }
 
