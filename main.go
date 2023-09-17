@@ -74,13 +74,12 @@ func main() {
 		return
 	}
 
-	handler = dbhandler.New(testMode)
+	handler = dbhandler.New(testMode, schema)
 	server.Addr = fmt.Sprintf("localhost:%d", port)
 	server.Handler = &handler
 
 	// Remove errors of not used
 	slog.Info("Input token path", "tokenpath", tknPath)
-	slog.Info("Schema input", "schema", schema)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
