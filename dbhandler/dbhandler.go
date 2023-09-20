@@ -50,16 +50,7 @@ func (c collection) collectionGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Puts a document into a collection
-func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path string) {
-	// Assuming paths of length one for now
-	path, err := decoder.PercentDecoding(path)
-
-	// Error messages printed in percentDecoding function
-	if err != nil {
-		msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
+func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema) {
 
 	// Read body of requests
 	desc, err := io.ReadAll(r.Body)
@@ -76,6 +67,14 @@ func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path str
 	if err != nil {
 		slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
 		http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate against schema
+	err = schema.Validate(docBody)
+	if err != nil {
+		slog.Error("Put document: document did not conform to schema", "error", err)
+		http.Error(w, `"document did not conform to schema"`, http.StatusBadRequest)
 		return
 	}
 
@@ -103,6 +102,7 @@ func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path str
 		c.documents.Store(path, modifiedDoc)
 
 		slog.Info("Overwrote an old document", "path", path)
+		w.Header().Set("Location", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
 	} else {
@@ -121,8 +121,8 @@ func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path str
 
 		c.documents.Store(path, document{docOutput, nil})
 		slog.Info("Created new document", "path", path)
-		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Location", r.URL.Path)
+		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonResponse)
 	}
 
@@ -344,8 +344,8 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			slog.Info("Created Database", "path", dbpath)
-			w.WriteHeader(http.StatusCreated)
 			w.Header().Set("Location", r.URL.Path)
+			w.WriteHeader(http.StatusCreated)
 			w.Write(jsonResponse)
 			return
 		}
@@ -373,7 +373,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		database.(collection).documentPut(w, r, splitpath[1])
+		database.(collection).documentPut(w, r, splitpath[1], d.schema)
 	}
 }
 

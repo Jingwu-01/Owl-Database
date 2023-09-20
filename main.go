@@ -123,14 +123,14 @@ func initialize() (int, *jsonschema.Schema, string, bool, error) {
 		return 0, nil, "", false, errors.New("Missing Schema")
 	}
 
-	// // Compile the schema
-	// schema, err := jsonschema.Compile(*schemaFlag)
+	// Compile the schema
+	schema, err := jsonschema.Compile(*schemaFlag)
 
-	// // Check for errors.
-	// if err != nil {
-	// 	slog.Error("Invalid schema", "error", err)
-	// 	return 0, nil, "", false, errors.New("Invalid schema")
-	// }
+	// Check for errors.
+	if err != nil {
+		slog.Error("Invalid schema", "error", err)
+		return 0, nil, "", false, errors.New("Invalid schema")
+	}
 
 	// Set to debug and above
 	if *loggerFlag == -1 {
@@ -144,5 +144,5 @@ func initialize() (int, *jsonschema.Schema, string, bool, error) {
 		slog.SetDefault(slog.New(h))
 	}
 
-	return *portFlag, nil, *tokenFlag, *testFlag, nil
+	return *portFlag, schema, *tokenFlag, *testFlag, nil
 }
