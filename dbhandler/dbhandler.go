@@ -1,3 +1,5 @@
+// A package implementing the highest level handling for
+// the OwlDB project.
 package dbhandler
 
 import (
