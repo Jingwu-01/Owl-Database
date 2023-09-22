@@ -3,6 +3,8 @@
 package dbhandler
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -175,11 +177,12 @@ func (d document) documentGet(w http.ResponseWriter, r *http.Request) {
 type Dbhandler struct {
 	databases *sync.Map
 	schema    *jsonschema.Schema
+	sessions  *sync.Map
 }
 
 // Creates a new DBHandler
 func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
-	retval := Dbhandler{&sync.Map{}, schema}
+	retval := Dbhandler{&sync.Map{}, schema, &sync.Map{}}
 	if testmode {
 		slog.Info("Test mode enabled", "INFO", 0)
 
@@ -198,8 +201,8 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.Get(w, r)
 	case http.MethodPut:
 		d.Put(w, r)
-	//case http.MethodPost:
-	// Post handling
+	case http.MethodPost:
+		d.Post(w, r)
 	//case http.MethodPatch:
 	// Patch handling
 	case http.MethodDelete:
@@ -446,7 +449,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Acess the document
+		// Access the document
 		_, exist := database.(collection).documents.Load(docpath)
 		if exist {
 			// Document found
@@ -462,4 +465,81 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// Handles case where we have POST request.
+func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
+	// Assume it is a User Login request here, need to change it later
+
+	// Set headers of response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Read body of requests
+	desc, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		slog.Error("Login: error reading the request body", "error", err)
+		http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+		return
+	}
+
+	// Read Body data
+	var userInfo map[string]string
+	err = json.Unmarshal(desc, &userInfo)
+	if err != nil {
+		slog.Error("Login: error unmarshaling request", "error", err)
+		http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+		return
+	}
+
+	// Validate against schema
+	err = d.schema.Validate(userInfo)
+	if err != nil {
+		slog.Error("Login: request body did not conform to schema", "error", err)
+		http.Error(w, `"Login: request body did not conform to schema"`, http.StatusBadRequest)
+		return
+	}
+
+	// Generate a secure, random token
+	token, err := generateToken()
+	if err != nil {
+		slog.Error("Login: token not successfully generated", "error", err)
+		http.Error(w, "Login: token not successfully generated", http.StatusInternalServerError)
+		return
+	}
+
+	// Store username and token in a session map with expiration time
+	username := userInfo["username"]
+	d.sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
+
+	// Return the token to the user
+	jsonToken, err := json.Marshal(map[string]string{"token": token})
+	if err != nil {
+		// This should never happen
+		slog.Error("Login: error marshaling", "error", err)
+		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonToken)
+	slog.Info("Login: success")
+}
+
+// generateToken is a helper function that generates a secure, random token
+func generateToken() (string, error) {
+	// 128 bits
+	token := make([]byte, 16)
+	// Fill the slide with cryptographically secure random bytes
+	_, err := rand.Read(token)
+	if err != nil {
+		return "", err
+	}
+	// Convert the random bytes to a hexadecimal string
+	return hex.EncodeToString(token), nil
+}
+
+type SessionInfo struct {
+	Username  string
+	ExpiresAt time.Time
 }
