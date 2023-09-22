@@ -407,55 +407,35 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	splitpath := strings.SplitAfterN(path, "/", 2)
 
+	dbpath, err := decoder.PercentDecoding(splitpath[0])
+
+	// Error messages printed in percentDecoding function
+	if err != nil {
+		msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+		http.Error(w, msg, http.StatusInternalServerError)
+		return
+	}
+
+	// Check to see if database exists
+	database, ok := d.databases.Load(dbpath)
+	// If the database does not exist, return StatusNotFound error
+	if !ok {
+		slog.Info("User attempted to access non-extant database", "db", dbpath)
+		msg := fmt.Sprintf("Database does not exist")
+		http.Error(w, msg, http.StatusNotFound)
+		return
+	}
+
 	if len(splitpath) == 1 {
 		// DELETE database case
-		dbpath, err := decoder.PercentDecoding(splitpath[0])
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-
-		// Check to see if database exists
-		_, ok := d.databases.Load(dbpath)
-		if ok {
-			// Database found
-			d.databases.Delete(dbpath)
-			slog.Info("Deleted Database", "path", dbpath)
-			w.Header().Set("Location", r.URL.Path)
-			w.WriteHeader(http.StatusNoContent)
-			return
-		} else {
-			// Database not found
-			slog.Error("Database does not exist")
-			http.Error(w, "Database does not exist", http.StatusNotFound)
-			return
-		}
+		d.databases.Delete(dbpath)
+		slog.Info("Deleted Database", "path", dbpath)
+		w.Header().Set("Location", r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+		return
 
 	} else {
 		// DELETE document case
-		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
-
-		// Access the database
-		database, ok := d.databases.Load(dbpath)
-
-		// Check to see if database exists
-		if !ok {
-			slog.Info("User attempted to access non-extant database", "db", dbpath)
-			msg := fmt.Sprintf("Database does not exist")
-			http.Error(w, msg, http.StatusNotFound)
-			return
-		}
 
 		// Decode the document name
 		docpath, _ := strings.CutSuffix(splitpath[1], "/")
@@ -469,6 +449,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 		// Acess the document
 		_, exist := database.(collection).documents.Load(docpath)
 		if exist {
+			// Document found
 			database.(collection).documents.Delete(docpath)
 			slog.Info("Deleted Document", "path", path)
 			w.Header().Set("Location", r.URL.Path)
@@ -480,6 +461,5 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Document does not exist", http.StatusNotFound)
 			return
 		}
-
 	}
 }
