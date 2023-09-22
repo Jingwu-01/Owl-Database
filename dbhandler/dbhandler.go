@@ -395,41 +395,17 @@ func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 
 // Handles case where we have DELETE request.
 func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Check if is a logout request. if yes, logout; otherwise continue.
+
 	if strings.Contains(r.URL.Path, "auth") {
-		// Logout request case
-
-		// check whether token is missing
-		token := r.Header.Get("Authorization")
-		if token == "" {
-			slog.Info("token is missing", "token", token)
-			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+		// Logout case
+		isValidToken := validateToken(d, w, r)
+		if isValidToken {
+			// Remove the corresponding userInfo from the sessions map
+			d.sessions.Delete(r.Header.Get("Authorization"))
+			w.WriteHeader(http.StatusNoContent)
+			slog.Info("user is successfully removed")
 			return
 		}
-
-		// Validate token and expiration in sessions map
-		userInfo, ok := d.sessions.Load(token)
-		if ok {
-			if userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
-				// Remove the corresponding userInfo from the sessions map
-				d.sessions.Delete(token)
-				w.WriteHeader(http.StatusNoContent)
-				slog.Info("user is successfully removed")
-				return
-			} else {
-				// token has expired
-				slog.Info("token has expired")
-				http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-				return
-			}
-
-		} else {
-			// token does not exist
-			slog.Info("token does not exist")
-			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-			return
-		}
-
 	} else {
 		// Set headers of response
 		w.Header().Set("Content-Type", "application/json")
@@ -585,4 +561,32 @@ func generateToken() (string, error) {
 type SessionInfo struct {
 	Username  string
 	ExpiresAt time.Time
+}
+
+func validateToken(d *Dbhandler, w http.ResponseWriter, r *http.Request) bool {
+	// check whether token is missing
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		slog.Info("token is missing", "token", token)
+		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+		return false
+	}
+
+	// Validate token and expiration in sessions map
+	userInfo, ok := d.sessions.Load(token)
+	if ok {
+		if !userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
+			// token has expired
+			slog.Info("token has expired")
+			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+			return false
+		} else {
+			return true
+		}
+	} else {
+		// token does not exist
+		slog.Info("token does not exist")
+		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+		return false
+	}
 }
