@@ -202,7 +202,8 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Post handling
 	//case http.MethodPatch:
 	// Patch handling
-	//case http.MethodDelete:
+	case http.MethodDelete:
+		d.Delete(w, r)
 	// Delete handling
 	case http.MethodOptions:
 		d.Options(w, r)
@@ -386,4 +387,99 @@ func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
 	w.WriteHeader(http.StatusOK)
+}
+
+// Handles case where we have DELETE request.
+func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Set headers of response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+
+	// Check for version
+	if !found {
+		slog.Info("User path did not include version", "path", path)
+		msg := fmt.Sprintf("path missing version: %s", path)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	splitpath := strings.SplitAfterN(path, "/", 2)
+
+	if len(splitpath) == 1 {
+		// DELETE database case
+		dbpath, err := decoder.PercentDecoding(splitpath[0])
+
+		// Error messages printed in percentDecoding function
+		if err != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusInternalServerError)
+			return
+		}
+
+		// Check to see if database exists
+		_, ok := d.databases.Load(dbpath)
+		if ok {
+			// Database found
+			d.databases.Delete(dbpath)
+			slog.Info("Deleted Database", "path", dbpath)
+			w.Header().Set("Location", r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		} else {
+			// Database not found
+			slog.Error("Database does not exist")
+			http.Error(w, "Database does not exist", http.StatusNotFound)
+			return
+		}
+
+	} else {
+		// DELETE document case
+		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
+		dbpath, err := decoder.PercentDecoding(dbpath)
+
+		// Error messages printed in percentDecoding function
+		if err != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		// Access the database
+		database, ok := d.databases.Load(dbpath)
+
+		// Check to see if database exists
+		if !ok {
+			slog.Info("User attempted to access non-extant database", "db", dbpath)
+			msg := fmt.Sprintf("Database does not exist")
+			http.Error(w, msg, http.StatusNotFound)
+			return
+		}
+
+		// Decode the document name
+		docpath, _ := strings.CutSuffix(splitpath[1], "/")
+		docpath, err1 := decoder.PercentDecoding(docpath)
+		if err1 != nil {
+			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		// Acess the document
+		_, exist := database.(collection).documents.Load(docpath)
+		if exist {
+			database.(collection).documents.Delete(docpath)
+			slog.Info("Deleted Document", "path", path)
+			w.Header().Set("Location", r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		} else {
+			// Document not found
+			slog.Error("Document does not exist")
+			http.Error(w, "Document does not exist", http.StatusNotFound)
+			return
+		}
+
+	}
 }
