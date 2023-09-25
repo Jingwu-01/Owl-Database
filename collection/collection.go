@@ -118,3 +118,22 @@ func (c Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path str
 	}
 
 }
+
+// Deletes a document from this collection
+func (c Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
+	// Access the document
+	_, exist := c.Documents.Load(docpath)
+	if exist {
+		// Document found
+		c.Documents.Delete(docpath)
+		slog.Info("Deleted Document", "path", r.URL.Path)
+		w.Header().Set("Location", r.URL.Path)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	} else {
+		// Document not found
+		slog.Error("Document does not exist")
+		http.Error(w, "Document does not exist", http.StatusNotFound)
+		return
+	}
+}

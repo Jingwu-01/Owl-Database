@@ -213,9 +213,9 @@ func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string)
 // Handles case where we have DELETE request.
 func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
-	if strings.Contains(r.URL.Path, "auth") {
+	if r.URL.Path == "/auth" {
 		// Logout case
-		isValidToken := validateToken(d, w, r)
+		isValidToken := d.validateToken(w, r)
 		if isValidToken {
 			// Remove the corresponding userInfo from the sessions map
 			d.sessions.Delete(r.Header.Get("Authorization"))
@@ -262,25 +262,10 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 		} else {
 			// DELETE document case
-
 			// Decode the document name
 			docpath, _ := strings.CutSuffix(splitpath[1], "/")
 
-			// Access the document
-			_, exist := database.(collection.Collection).Documents.Load(docpath)
-			if exist {
-				// Document found
-				database.(collection.Collection).Documents.Delete(docpath)
-				slog.Info("Deleted Document", "path", path)
-				w.Header().Set("Location", r.URL.Path)
-				w.WriteHeader(http.StatusNoContent)
-				return
-			} else {
-				// Document not found
-				slog.Error("Document does not exist")
-				http.Error(w, "Document does not exist", http.StatusNotFound)
-				return
-			}
+			database.(collection.Collection).DocumentDelete(w, r, docpath)
 		}
 	}
 }
@@ -288,7 +273,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Handles case where we have POST request.
 func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 
-	if strings.Contains(r.URL.Path, "auth") {
+	if r.URL.Path == "/auth" {
 		// Login request case
 
 		// Set headers of response
@@ -313,6 +298,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// I am pretty sure we do not need to validate the login request.
 		// Validate against schema
 		err = d.schema.Validate(userInfo)
 		if err != nil {
@@ -329,6 +315,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// I think we should get the username with the JSON visitor model.
 		// Store username and token in a session map with expiration time
 		username := userInfo["username"]
 		d.sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
@@ -376,7 +363,7 @@ type SessionInfo struct {
 	ExpiresAt time.Time
 }
 
-func validateToken(d *Dbhandler, w http.ResponseWriter, r *http.Request) bool {
+func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
 	// check whether token is missing
 	token := r.Header.Get("Authorization")
 	if token == "" {
