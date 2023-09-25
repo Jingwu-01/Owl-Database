@@ -66,3 +66,20 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] 
 
 	return &ret
 }
+
+// Creates a new node object.
+func newNode[K cmp.Ordered, V any](key K, val V, topLevel int) *node[K, V] {
+	var newnode node[K, V]
+
+	newnode.fullyLinked = atomic.Bool{}
+	newnode.fullyLinked.Store(false)
+	newnode.marked = atomic.Bool{}
+	newnode.marked.Store(false)
+	newnode.key = key
+	newnode.value = val
+	newnode.topLevel = topLevel
+	// Will ask at LT if it can be to toplevel or has to be to max.
+	newnode.next = make([]atomic.Pointer[node[K, V]], topLevel)
+
+	return &newnode
+}
