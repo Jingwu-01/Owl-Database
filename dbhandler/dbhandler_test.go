@@ -10,6 +10,7 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 type test struct {
@@ -20,7 +21,9 @@ type test struct {
 }
 
 func TestServeHTTP(t *testing.T) {
-	testhandler := New(false, nil)
+	// Compile the schema
+	testschema, _ := jsonschema.Compile("testschema.json")
+	testhandler := New(false, testschema)
 
 	data := []test{
 		{httptest.NewRequest(http.MethodPut, "/db1", nil),
