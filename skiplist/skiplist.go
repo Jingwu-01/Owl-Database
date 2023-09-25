@@ -20,7 +20,7 @@ type node[K cmp.Ordered, V any] struct {
 // A struct representing a skiplist.
 type SkipList[K cmp.Ordered, V any] struct {
 	head     *node[K, V]
-	totalOps atomic.Int32
+	totalOps *atomic.Int32
 }
 
 // For query returns.
@@ -59,7 +59,7 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] 
 	// Construct the skip list
 	var ret SkipList[K, V]
 	ret.head = &head
-	ret.totalOps = atomic.Int32{}
+	ret.totalOps = &atomic.Int32{}
 	ret.totalOps.Store(0)
 
 	return &ret
@@ -83,15 +83,15 @@ func newNode[K cmp.Ordered, V any](key K, val V, topLevel int) *node[K, V] {
 }
 
 // Helper method for Find, Upsert and Remove.
-func (s *SkipList[K, V]) find(key K) (int, []atomic.Pointer[node[K, V]], []atomic.Pointer[node[K, V]]) {
+func (s SkipList[K, V]) find(key K) (int, []*node[K, V], []*node[K, V]) {
 	// Initialize vars for searching the list.
 	foundLevel := -1
 	pred := s.head
 	level := pred.topLevel
 
 	// Initialize return values
-	preds := make([]atomic.Pointer[node[K, V]], level)
-	succs := make([]atomic.Pointer[node[K, V]], level)
+	preds := make([]*node[K, V], level)
+	succs := make([]*node[K, V], level)
 
 	// Find successor at each level.
 	for level >= 0 {
@@ -110,16 +110,24 @@ func (s *SkipList[K, V]) find(key K) (int, []atomic.Pointer[node[K, V]], []atomi
 		}
 
 		// Update preds, succs, and level.
-		temp := atomic.Pointer[node[K, V]]{}
-		temp.Store(pred)
-		preds[level] = temp
-
-		temp2 := atomic.Pointer[node[K, V]]{}
-		temp.Store(curr)
-		succs[level] = temp2
+		preds[level] = pred
+		succs[level] = curr
 
 		level--
 	}
 
 	return foundLevel, preds, succs
+}
+
+// Finds the value corresponding to key K in s.
+func (s SkipList[K, V]) Find(key K) (V, bool) {
+	levelFound, _, succs := s.find(key)
+
+	if levelFound == -1 {
+		var zero V
+		return zero, false
+	}
+
+	found := succs[levelFound]
+	return found.value, found.fullyLinked.Load() && !found.marked.Load()
 }
