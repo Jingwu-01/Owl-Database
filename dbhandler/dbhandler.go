@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -36,13 +35,15 @@ type Dbhandler struct {
 // Creates a new DBHandler
 func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
 	retval := Dbhandler{&sync.Map{}, schema, &sync.Map{}}
+
 	if testmode {
 		slog.Info("Test mode enabled", "INFO", 0)
 
 		// The current test cases will have
-		retval.databases.Store("db1", collection.Collection{&sync.Map{}})
-		retval.databases.Store("db2", collection.Collection{&sync.Map{}})
+		retval.databases.Store("db1", collection.New())
+		retval.databases.Store("db2", collection.New())
 	}
+
 	return retval
 }
 
@@ -60,7 +61,6 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Patch handling
 	case http.MethodDelete:
 		d.Delete(w, r)
-	// Delete handling
 	case http.MethodOptions:
 		d.Options(w, r)
 	default:
@@ -100,14 +100,6 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	} else if splitpath[1] == "" {
 		// GET Database
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -125,15 +117,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// GET Document
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
 		path = splitpath[1]
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -180,47 +164,12 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	if len(splitpath) == 1 {
 		// PUT database case
-		dbpath, err := decoder.PercentDecoding(splitpath[0])
+		dbpath := splitpath[0]
 
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-
-		// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
-		_, loaded := d.databases.LoadOrStore(dbpath, collection.Collection{&sync.Map{}})
-		if loaded {
-			slog.Error("Database already exists")
-			http.Error(w, "Database already exists", http.StatusBadRequest)
-			return
-		} else {
-			jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-			if err != nil {
-				// This should never happen
-				slog.Error("Get: error marshaling", "error", err)
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return
-			}
-			slog.Info("Created Database", "path", dbpath)
-			w.Header().Set("Location", r.URL.Path)
-			w.WriteHeader(http.StatusCreated)
-			w.Write(jsonResponse)
-			return
-		}
-
+		d.putDB(w, r, dbpath)
 	} else {
 		// PUT document or collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -237,13 +186,28 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles case where we have OPTIONS request.
-func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Allow", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
-	w.WriteHeader(http.StatusOK)
+// Puts a new top level database into our handler
+func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string) {
+	// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
+	_, loaded := d.databases.LoadOrStore(dbpath, collection.New())
+	if loaded {
+		slog.Error("Database already exists")
+		http.Error(w, "Database already exists", http.StatusBadRequest)
+		return
+	} else {
+		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		slog.Info("Created Database", "path", dbpath)
+		w.Header().Set("Location", r.URL.Path)
+		w.WriteHeader(http.StatusCreated)
+		w.Write(jsonResponse)
+		return
+	}
 }
 
 // Handles case where we have DELETE request.
@@ -276,14 +240,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 		splitpath := strings.SplitAfterN(path, "/", 2)
 
-		dbpath, err := decoder.PercentDecoding(splitpath[0])
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
+		dbpath := splitpath[0]
 
 		// Check to see if database exists
 		database, ok := d.databases.Load(dbpath)
@@ -308,12 +265,6 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 			// Decode the document name
 			docpath, _ := strings.CutSuffix(splitpath[1], "/")
-			docpath, err1 := decoder.PercentDecoding(docpath)
-			if err1 != nil {
-				msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-				http.Error(w, msg, http.StatusBadRequest)
-				return
-			}
 
 			// Access the document
 			_, exist := database.(collection.Collection).Documents.Load(docpath)
@@ -409,6 +360,15 @@ func generateToken() (string, error) {
 	}
 	// Convert the random bytes to a hexadecimal string
 	return hex.EncodeToString(token), nil
+}
+
+// Handles case where we have OPTIONS request.
+func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Allow", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
+	w.WriteHeader(http.StatusOK)
 }
 
 type SessionInfo struct {

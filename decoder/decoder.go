@@ -1,3 +1,4 @@
+// Currently useless as far as we can tell.
 package decoder
 
 import (
