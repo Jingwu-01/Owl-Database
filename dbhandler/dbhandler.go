@@ -14,162 +14,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // A putoutput stores the response to a put request.
 type putoutput struct {
 	Uri string `json:"uri"`
-}
-
-/*
-A collection is a concurrent skip list of documents,
-which is sorted by document name.
-*/
-type collection struct {
-	documents *sync.Map
-}
-
-// Gets a collection
-func (c collection) collectionGet(w http.ResponseWriter, r *http.Request) {
-	returnDocs := make([]docoutput, 0)
-
-	// Add each docoutput to the docoutputs list
-	c.documents.Range(func(key, value interface{}) bool {
-		returnDocs = append(returnDocs, value.(document).output)
-		return true
-	})
-
-	// Convert to JSON and send
-	jsonToDo, err := json.Marshal(returnDocs)
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
-	}
-	w.Write(jsonToDo)
-	slog.Info("GET: success")
-}
-
-// Puts a document into a collection
-func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema) {
-
-	// Read body of requests
-	desc, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		slog.Error("Put document: error reading the document request body", "error", err)
-		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Read Body data
-	var docBody map[string]interface{}
-	err = json.Unmarshal(desc, &docBody)
-	if err != nil {
-		slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
-		http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Validate against schema
-	err = schema.Validate(docBody)
-	if err != nil {
-		slog.Error("Put document: document did not conform to schema", "error", err)
-		http.Error(w, `"document did not conform to schema"`, http.StatusBadRequest)
-		return
-	}
-
-	// Either modify or create a new document
-	existingDoc, exists := c.documents.Load(path)
-	if exists {
-		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-		if err != nil {
-			// This should never happen
-			slog.Error("Get: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-		// Need to modify metadata
-		var modifiedDoc = existingDoc.(document)
-		existingDocOutput := modifiedDoc.output
-		existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
-		existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
-
-		// Modify document contents
-		existingDocOutput.Doc = docBody
-
-		// Modify it again in the doc
-		modifiedDoc.output = existingDocOutput
-		c.documents.Store(path, modifiedDoc)
-
-		slog.Info("Overwrote an old document", "path", path)
-		w.Header().Set("Location", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonResponse)
-	} else {
-		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-		if err != nil {
-			// This should never happen
-			slog.Error("Get: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-		// Create a new document
-		var docOutput docoutput
-		docOutput.Path = "/" + path
-		docOutput.Doc = docBody
-		docOutput.Meta = meta{"DUMMY USER", time.Now().UnixMilli(), "DUMMY USER", time.Now().UnixMilli()}
-
-		c.documents.Store(path, document{docOutput, nil})
-		slog.Info("Created new document", "path", path)
-		w.Header().Set("Location", r.URL.Path)
-		w.WriteHeader(http.StatusCreated)
-		w.Write(jsonResponse)
-	}
-
-}
-
-// A meta stores metadata about a document.
-type meta struct {
-	CreatedBy      string `json:"createdBy"`
-	CreatedAt      int64  `json:"createdAt"`
-	LastModifiedBy string `json:"lastModifiedBy"`
-	LastModifiedAt int64  `json:"lastModifiedAt"`
-}
-
-/*
-A docoutput is a struct which represents the data to
-be output when a user requests a given document.
-*/
-type docoutput struct {
-	Path string                 `json:"path"`
-	Doc  map[string]interface{} `json:"doc"`
-	Meta meta                   `json:"meta"`
-}
-
-// A document is a document plus a concurrent skip list of collections
-type document struct {
-	output   docoutput
-	children *sync.Map
-}
-
-// Gets a document
-func (d document) documentGet(w http.ResponseWriter, r *http.Request) {
-	// Convert to JSON and send
-	jsonDoc, err := json.Marshal(d.output)
-
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
-	}
-
-	w.Write(jsonDoc)
-	slog.Info("GET: success")
 }
 
 // A dbhandler is the highest level struct, holds all the collections and
@@ -187,8 +40,8 @@ func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
 		slog.Info("Test mode enabled", "INFO", 0)
 
 		// The current test cases will have
-		retval.databases.Store("db1", collection{&sync.Map{}})
-		retval.databases.Store("db2", collection{&sync.Map{}})
+		retval.databases.Store("db1", collection.Collection{&sync.Map{}})
+		retval.databases.Store("db2", collection.Collection{&sync.Map{}})
 	}
 	return retval
 }
@@ -267,7 +120,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		database.(collection).collectionGet(w, r)
+		database.(collection.Collection).CollectionGet(w, r)
 
 	} else {
 		// GET Document
@@ -295,7 +148,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 
 		// Get document
 		// for checkpoint 1, we assume that path will always be a document name
-		doc, ok := database.(collection).documents.Load(path)
+		doc, ok := database.(collection.Collection).Documents.Load(path)
 		if !ok {
 			slog.Info("User attempted to access non-extant document", "doc", path)
 			msg := fmt.Sprintf("Document does not exist")
@@ -303,7 +156,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		doc.(document).documentGet(w, r)
+		doc.(document.Document).DocumentGet(w, r)
 	}
 }
 
@@ -337,7 +190,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
-		_, loaded := d.databases.LoadOrStore(dbpath, collection{&sync.Map{}})
+		_, loaded := d.databases.LoadOrStore(dbpath, collection.Collection{&sync.Map{}})
 		if loaded {
 			slog.Error("Database already exists")
 			http.Error(w, "Database already exists", http.StatusBadRequest)
@@ -380,7 +233,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		database.(collection).documentPut(w, r, splitpath[1], d.schema)
+		database.(collection.Collection).DocumentPut(w, r, splitpath[1], d.schema)
 	}
 }
 
@@ -487,10 +340,10 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Access the document
-			_, exist := database.(collection).documents.Load(docpath)
+			_, exist := database.(collection.Collection).Documents.Load(docpath)
 			if exist {
 				// Document found
-				database.(collection).documents.Delete(docpath)
+				database.(collection.Collection).Documents.Delete(docpath)
 				slog.Info("Deleted Document", "path", path)
 				w.Header().Set("Location", r.URL.Path)
 				w.WriteHeader(http.StatusNoContent)

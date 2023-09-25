@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 )
 
 type test struct {
@@ -57,9 +60,9 @@ func TestServeHTTP(t *testing.T) {
 
 	// Have to get specific values to check documents for equality
 	db1, _ := testhandler.databases.Load("db1")
-	doc1, _ := db1.(collection).documents.Load("doc1")
+	doc1, _ := db1.(collection.Collection).Documents.Load("doc1")
 	doc1str := fmt.Sprintf("{\"path\":\"/doc1\",\"doc\":{\"prop\":100},\"meta\":{\"createdBy\":\"%s\",\"createdAt\":%d,\"lastModifiedBy\":\"%s\",\"lastModifiedAt\":%d}}",
-		doc1.(document).output.Meta.CreatedBy, doc1.(document).output.Meta.CreatedAt, doc1.(document).output.Meta.LastModifiedBy, doc1.(document).output.Meta.LastModifiedAt)
+		doc1.(document.Document).Output.Meta.CreatedBy, doc1.(document.Document).Output.Meta.CreatedAt, doc1.(document.Document).Output.Meta.LastModifiedBy, doc1.(document.Document).Output.Meta.LastModifiedAt)
 	data = []test{
 		{httptest.NewRequest(http.MethodGet, "/v1/db1/doc1", nil),
 			httptest.NewRecorder(),
