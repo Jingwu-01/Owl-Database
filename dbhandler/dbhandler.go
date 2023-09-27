@@ -196,7 +196,8 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.Get(w, r)
 	case http.MethodPut:
 		d.Put(w, r)
-	//case http.MethodPost:
+	case http.MethodPost:
+		d.Post(w, r)
 	// Post handling
 	//case http.MethodPatch:
 	// Patch handling
@@ -384,4 +385,32 @@ func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
 	w.WriteHeader(http.StatusOK)
+}
+
+// Handles case where we have POST request.
+func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
+	// Set headers of response
+	// TODO: can we put all header information in the start?
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+
+	// Check for version
+	if !found {
+		slog.Info("User path did not include version", "path", path)
+		msg := fmt.Sprintf("path missing version: %s", path)
+		http.Error(w, msg, http.StatusBadRequest)
+	}
+
+	// Check that its a AUTH or POST Database request
+	splitpath := strings.SplitAfterN(path, "/", 2)
+
+	if len(splitpath) == 2 && splitpath[1] == "" {
+		// POST database
+		// Navigate to path (TODO create)
+		// Generate a random name (TODO create)
+		// Verify that directory does not have that name
+		// Return new idss
+	}
 }
