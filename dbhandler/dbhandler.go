@@ -3,8 +3,6 @@
 package dbhandler
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -308,7 +307,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Generate a secure, random token
-		token, err := generateToken()
+		token, err := authentication.GenerateToken()
 		if err != nil {
 			slog.Error("Login: token not successfully generated", "error", err)
 			http.Error(w, "Login: token not successfully generated", http.StatusInternalServerError)
@@ -318,7 +317,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 		// I think we should get the username with the JSON visitor model.
 		// Store username and token in a session map with expiration time
 		username := userInfo["username"]
-		d.sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
+		d.sessions.Store(token, authentication.SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
 
 		// Return the token to the user
 		jsonToken, err := json.Marshal(map[string]string{"token": token})
@@ -336,19 +335,6 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// generateToken is a helper function that generates a secure, random token
-func generateToken() (string, error) {
-	// 128 bits
-	token := make([]byte, 16)
-	// Fill the slide with cryptographically secure random bytes
-	_, err := rand.Read(token)
-	if err != nil {
-		return "", err
-	}
-	// Convert the random bytes to a hexadecimal string
-	return hex.EncodeToString(token), nil
-}
-
 // Handles case where we have OPTIONS request.
 func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Allow", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
@@ -356,11 +342,6 @@ func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
 	w.WriteHeader(http.StatusOK)
-}
-
-type SessionInfo struct {
-	Username  string
-	ExpiresAt time.Time
 }
 
 func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
@@ -375,7 +356,7 @@ func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
 	// Validate token and expiration in sessions map
 	userInfo, ok := d.sessions.Load(token)
 	if ok {
-		if !userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
+		if !userInfo.(authentication.SessionInfo).ExpiresAt.After(time.Now()) {
 			// token has expired
 			slog.Info("token has expired")
 			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
