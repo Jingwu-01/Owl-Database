@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -211,17 +210,8 @@ func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string)
 
 // Handles case where we have DELETE request.
 func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
-
 	if r.URL.Path == "/auth" {
-		// Logout case
-		isValidToken := d.validateToken(w, r)
-		if isValidToken {
-			// Remove the corresponding userInfo from the sessions map
-			d.sessions.Delete(r.Header.Get("Authorization"))
-			w.WriteHeader(http.StatusNoContent)
-			slog.Info("user is successfully removed")
-			return
-		}
+		// logout
 	} else {
 		// Set headers of response
 		w.Header().Set("Content-Type", "application/json")
@@ -307,7 +297,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Generate a secure, random token
-		token, err := authentication.GenerateToken()
+		token, err := generateToken()
 		if err != nil {
 			slog.Error("Login: token not successfully generated", "error", err)
 			http.Error(w, "Login: token not successfully generated", http.StatusInternalServerError)
@@ -317,7 +307,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 		// I think we should get the username with the JSON visitor model.
 		// Store username and token in a session map with expiration time
 		username := userInfo["username"]
-		d.sessions.Store(token, authentication.SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
+		d.sessions.Store(token, sessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
 
 		// Return the token to the user
 		jsonToken, err := json.Marshal(map[string]string{"token": token})
@@ -342,32 +332,4 @@ func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
 	w.WriteHeader(http.StatusOK)
-}
-
-func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
-	// check whether token is missing
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		slog.Info("token is missing", "token", token)
-		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-		return false
-	}
-
-	// Validate token and expiration in sessions map
-	userInfo, ok := d.sessions.Load(token)
-	if ok {
-		if !userInfo.(authentication.SessionInfo).ExpiresAt.After(time.Now()) {
-			// token has expired
-			slog.Info("token has expired")
-			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-			return false
-		} else {
-			return true
-		}
-	} else {
-		// token does not exist
-		slog.Info("token does not exist")
-		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-		return false
-	}
 }
