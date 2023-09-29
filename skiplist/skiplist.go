@@ -131,3 +131,170 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 	found := succs[levelFound]
 	return found.value, found.fullyLinked.Load() && !found.marked.Load()
 }
+
+func (s SkipList[K, V]) Insert(key K, value V) bool {
+	// Random top level
+	// TODO: random
+	topLevel := 1
+
+	// Keep trying insert
+	for {
+		// Check if already existing key
+		levelFound, preds, succs := s.find(key)
+		if levelFound != -1 {
+			found := succs[levelFound]
+			if !found.marked.Load() {
+				// Node already exists; return
+				// Wait for other insert to finish if needed
+				for !found.fullyLinked.Load() {
+				}
+				return false
+			}
+
+			// Found node being removed; retry
+			continue
+		}
+
+		// Key not found, Lock all predecessors
+		highestLocked := 1
+		valid := true
+		level := 0
+
+		// Lock all predecessors
+		for ; valid && level <= topLevel; level++ {
+			preds[level].Lock()
+			highestLocked = level
+
+			// Check pred/succ still valid
+			unmarked := !preds[level].marked.Load() && !succs[level].marked.Load()
+			connected := preds[level].next[level].Load() == succs[level]
+			valid = unmarked && connected
+		}
+
+		if !valid {
+			// Pred/succ changed. Unlock and retry
+			for level = highestLocked; level >= 0; level-- {
+				preds[level].Unlock()
+			}
+
+			continue
+		}
+
+		// Insert node
+		// TODO: what is topLevel?
+		node := newNode(key, value, topLevel)
+
+		// Set next pointers on each level
+		for level = 0; level <= topLevel; level++ {
+			node.next[level].Store(succs[level])
+		}
+
+		// Add to skip list from bottom up
+		for level = 0; level <= topLevel; level++ {
+			preds[level].next[level].Store(node)
+		}
+
+		node.fullyLinked.Store(true)
+
+		// Unlock
+		for level = highestLocked; level >= 0; level-- {
+			preds[level].Unlock()
+		}
+		return true
+	}
+}
+
+// TODO: function sig?
+func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
+	isMarked := false
+	topLevel := -1
+	var victim *node[K, V]
+
+	// Keep trying to remove until success/failure
+	for {
+		// Find victim to remove
+		levelFound, preds, succs := s.find(key)
+
+		if levelFound != -1 {
+			victim = succs[levelFound]
+		}
+
+		if !isMarked {
+			// First time through
+			if levelFound == -1 {
+				// Nothing found
+				return nil, false
+			}
+
+			if !victim.fullyLinked.Load() {
+				// Victim not fully inserted
+				return nil, false
+			}
+
+			if victim.marked.Load() {
+				// Victim already being removed
+				return nil, false
+			}
+
+			if victim.topLevel != levelFound {
+				// Not fully linked when found
+				return nil, false
+			}
+
+			topLevel = victim.topLevel
+			victim.Lock()
+			if victim.marked.Load() {
+				// Another call beat us
+				victim.Unlock()
+				return nil, false
+			}
+
+			victim.marked.Store(true)
+			isMarked = true
+		}
+
+		// Victim found, lock predecessors
+		highestLocked := -1
+		level := 0
+		valid := true
+
+		for valid && (level <= topLevel) {
+			pred := preds[level]
+			pred.Lock()
+			highestLocked = level
+			successor := pred.next[level].Load() == victim
+			valid = !pred.marked.Load() && successor
+			level++
+		}
+
+		if !valid {
+			// Unlock
+			level = highestLocked
+			for level >= 0 {
+				preds[level].Unlock()
+				level--
+			}
+
+			// Predecessor changed, try again
+			continue
+		}
+
+		// Begin removal - all nodes are locked and valid
+		// Unlink
+		level = topLevel
+		for level >= 0 {
+			preds[level].next[level].Store(victim.next[level].Load())
+			level--
+		}
+
+		// Unlock
+		victim.Unlock()
+		level = highestLocked
+		for level >= 0 {
+			preds[level].Unlock()
+			level--
+		}
+
+		return victim, true
+	}
+}
