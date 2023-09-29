@@ -381,6 +381,7 @@ func (s SkipList[K, V]) query(start K, end K) (results []Pair[K, V]) {
 			break
 		} else {
 			results = append(results, Pair[K, V]{curr.key, curr.value})
+			curr = curr.next[level].Load()
 		}
 	}
 
