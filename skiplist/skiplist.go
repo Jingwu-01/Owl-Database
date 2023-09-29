@@ -2,6 +2,8 @@ package skiplist
 
 import (
 	"cmp"
+	"context"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 )
@@ -28,6 +30,9 @@ type Pair[K cmp.Ordered, V any] struct {
 	Key   K
 	Value V
 }
+
+// For Upsert
+type UpdateCheck[K cmp.Ordered, V any] func(key K, currValue V, exists bool) (newValue V, err error)
 
 // Creates an empty new skiplist object
 func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] {
@@ -132,10 +137,10 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 	return found.value, found.fullyLinked.Load() && !found.marked.Load()
 }
 
-func (s SkipList[K, V]) Insert(key K, value V) bool {
+func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
 	// Random top level
-	// TODO: random
-	topLevel := 1
+	// TODO: random?
+	topLevel := rand.Intn(s.head.topLevel)
 
 	// Keep trying insert
 	for {
@@ -144,11 +149,28 @@ func (s SkipList[K, V]) Insert(key K, value V) bool {
 		if levelFound != -1 {
 			found := succs[levelFound]
 			if !found.marked.Load() {
-				// Node already exists; return
-				// Wait for other insert to finish if needed
-				for !found.fullyLinked.Load() {
+				// Node already exists (update case)
+				// TODO: ensure that a node's 'real' value only exists at the lowest level
+				// so only need to obtain found's lock
+				found.Lock()
+
+				// Recheck once lock is obtained
+				if !found.marked.Load() {
+					found.Unlock()
+					continue
 				}
-				return false
+
+				// Use updatecheck to either update or ignore
+				newV, err := check(found.key, found.value, true)
+				if err != nil {
+					found.Unlock()
+					return false, err
+				} else {
+					found.value = newV
+					found.Unlock()
+					s.totalOps.Add(1)
+					return true, nil
+				}
 			}
 
 			// Found node being removed; retry
@@ -156,6 +178,16 @@ func (s SkipList[K, V]) Insert(key K, value V) bool {
 		}
 
 		// Key not found, Lock all predecessors
+		// Decide to insert or not
+
+		// TODO: right place to place?
+		// declared for zero value
+		var def V
+		newV, err := check(key, def, false)
+		if err != nil {
+			return false, err
+		}
+
 		highestLocked := 1
 		valid := true
 		level := 0
@@ -182,7 +214,7 @@ func (s SkipList[K, V]) Insert(key K, value V) bool {
 
 		// Insert node
 		// TODO: what is topLevel?
-		node := newNode(key, value, topLevel)
+		node := newNode(key, newV, topLevel)
 
 		// Set next pointers on each level
 		for level = 0; level <= topLevel; level++ {
@@ -200,11 +232,11 @@ func (s SkipList[K, V]) Insert(key K, value V) bool {
 		for level = highestLocked; level >= 0; level-- {
 			preds[level].Unlock()
 		}
-		return true
+		s.totalOps.Add(1)
+		return true, nil
 	}
 }
 
-// TODO: function sig?
 func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 	isMarked := false
 	topLevel := -1
@@ -295,6 +327,62 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 			level--
 		}
 
+		s.totalOps.Add(1)
 		return victim, true
 	}
+}
+
+func (s SkipList[K, V]) Query(ctx context.Context, start K, end K) (results []Pair[K, V], err error) {
+	// Repeatedly make queries
+	for {
+		// Use a counter to check that a write has not done
+		// before query has finished
+		oldOps := s.totalOps.Load()
+		res := s.query(start, end)
+		if oldOps == s.totalOps.Load() {
+			return res, nil
+		}
+
+		// If deadline reached, then preemptively return
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// Implementation of the Query method
+func (s SkipList[K, V]) query(start K, end K) (results []Pair[K, V]) {
+	// Initialize vars for searching the list.
+	pred := s.head
+	level := pred.topLevel
+
+	// Initialize return values
+	results = make([]Pair[K, V], 0)
+
+	// Find successor at each level.
+	curr := pred
+	for level > 0 {
+		// Initialize current node.
+		curr = pred.next[level].Load()
+
+		// Look through this level of the list until we go past key.
+		for start > curr.key {
+			pred = curr
+			curr = pred.next[level].Load()
+		}
+
+		level--
+	}
+
+	// When at last level, add everything until reach end
+	for {
+		if curr.key > end {
+			break
+		} else {
+			results = append(results, Pair[K, V]{curr.key, curr.value})
+		}
+	}
+
+	return results
 }
