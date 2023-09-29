@@ -42,8 +42,6 @@ server, as well as adding new ones, and subscribing to changes.
 package main
 
 import (
-	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -52,6 +50,7 @@ import (
 	"syscall"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/dbhandler"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/initialize"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -67,7 +66,7 @@ func main() {
 	var handler dbhandler.Dbhandler
 
 	// Initialize the user input variables.
-	port, schema, tknPath, testMode, err = initialize()
+	port, schema, tknPath, testMode, err = initialize.Initialize()
 
 	// Printing was handled in initialize.
 	if err != nil {
@@ -102,47 +101,4 @@ func main() {
 	} else {
 		slog.Info("Server closed", "error", err)
 	}
-}
-
-// Initialize sets up flags for inputs and compiles
-// the input schema file into a jsonschema.Schema object.
-// Returns the port number, schema object, and the token
-// file's path.
-func initialize() (int, *jsonschema.Schema, string, bool, error) {
-	// Initialize flags
-	portFlag := flag.Int("p", 3318, "Port number")
-	schemaFlag := flag.String("s", "", "Schema file name")
-	tokenFlag := flag.String("t", "", "Token file name")
-	loggerFlag := flag.Int("l", 0, "Logger output level, -1 for debug, 1 for only errors")
-	testFlag := flag.Bool("i", false, "true to initialize a default database for testing")
-	flag.Parse()
-
-	// Ensure we got a schema file
-	if *schemaFlag == "" {
-		slog.Error("Missing schema", "error", errors.New("Missing schema"))
-		return 0, nil, "", false, errors.New("Missing Schema")
-	}
-
-	// // Compile the schema
-	// schema, err := jsonschema.Compile(*schemaFlag)
-
-	// // Check for errors.
-	// if err != nil {
-	// 	slog.Error("Invalid schema", "error", err)
-	// 	return 0, nil, "", false, errors.New("Invalid schema")
-	// }
-
-	// Set to debug and above
-	if *loggerFlag == -1 {
-		h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
-		slog.SetDefault(slog.New(h))
-	}
-
-	// Set to error only
-	if *loggerFlag == 1 {
-		h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})
-		slog.SetDefault(slog.New(h))
-	}
-
-	return *portFlag, nil, *tokenFlag, *testFlag, nil
 }

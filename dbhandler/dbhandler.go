@@ -1,6 +1,10 @@
+// A package implementing the highest level handling for
+// the OwlDB project.
 package dbhandler
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -19,172 +24,26 @@ type putoutput struct {
 	Uri string `json:"uri"`
 }
 
-/*
-A collection is a concurrent skip list of documents,
-which is sorted by document name.
-*/
-type collection struct {
-	documents *sync.Map
-}
-
-// Gets a collection
-func (c collection) collectionGet(w http.ResponseWriter, r *http.Request) {
-	returnDocs := make([]docoutput, 0)
-
-	// Add each docoutput to the docoutputs list
-	c.documents.Range(func(key, value interface{}) bool {
-		returnDocs = append(returnDocs, value.(document).output)
-		return true
-	})
-
-	// Convert to JSON and send
-	jsonToDo, err := json.Marshal(returnDocs)
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
-	}
-	w.Write(jsonToDo)
-	slog.Info("GET: success")
-}
-
-// Puts a document into a collection
-func (c collection) documentPut(w http.ResponseWriter, r *http.Request, path string) {
-	// Assuming paths of length one for now
-	path, err := decoder.PercentDecoding(path)
-
-	// Error messages printed in percentDecoding function
-	if err != nil {
-		msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	// Read body of requests
-	desc, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		slog.Error("Put document: error reading the document request body", "error", err)
-		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Read Body data
-	var docBody map[string]interface{}
-	err = json.Unmarshal(desc, &docBody)
-	if err != nil {
-		slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
-		http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Either modify or create a new document
-	existingDoc, exists := c.documents.Load(path)
-	if exists {
-		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-		if err != nil {
-			// This should never happen
-			slog.Error("Get: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-		// Need to modify metadata
-		var modifiedDoc = existingDoc.(document)
-		existingDocOutput := modifiedDoc.output
-		existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
-		existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
-
-		// Modify document contents
-		existingDocOutput.Doc = docBody
-
-		// Modify it again in the doc
-		modifiedDoc.output = existingDocOutput
-		c.documents.Store(path, modifiedDoc)
-
-		slog.Info("Overwrote an old document", "path", path)
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonResponse)
-	} else {
-		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-		if err != nil {
-			// This should never happen
-			slog.Error("Get: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-		// Create a new document
-		var docOutput docoutput
-		docOutput.Path = "/" + path
-		docOutput.Doc = docBody
-		docOutput.Meta = meta{"DUMMY USER", time.Now().UnixMilli(), "DUMMY USER", time.Now().UnixMilli()}
-
-		c.documents.Store(path, document{docOutput, nil})
-		slog.Info("Created new document", "path", path)
-		w.WriteHeader(http.StatusCreated)
-		w.Header().Set("Location", r.URL.Path)
-		w.Write(jsonResponse)
-	}
-
-}
-
-// A meta stores metadata about a document.
-type meta struct {
-	CreatedBy      string `json:"createdBy"`
-	CreatedAt      int64  `json:"createdAt"`
-	LastModifiedBy string `json:"lastModifiedBy"`
-	LastModifiedAt int64  `json:"lastModifiedAt"`
-}
-
-/*
-A docoutput is a struct which represents the data to
-be output when a user requests a given document.
-*/
-type docoutput struct {
-	Path string                 `json:"path"`
-	Doc  map[string]interface{} `json:"doc"`
-	Meta meta                   `json:"meta"`
-}
-
-// A document is a document plus a concurrent skip list of collections
-type document struct {
-	output   docoutput
-	children *sync.Map
-}
-
-// Gets a document
-func (d document) documentGet(w http.ResponseWriter, r *http.Request) {
-	// Convert to JSON and send
-	jsonDoc, err := json.Marshal(d.output)
-
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
-	}
-
-	w.Write(jsonDoc)
-	slog.Info("GET: success")
-}
-
 // A dbhandler is the highest level struct, holds all the collections and
 // handles all the http requests.
 type Dbhandler struct {
 	databases *sync.Map
 	schema    *jsonschema.Schema
+	sessions  *sync.Map
 }
 
 // Creates a new DBHandler
 func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
-	retval := Dbhandler{&sync.Map{}, schema}
+	retval := Dbhandler{&sync.Map{}, schema, &sync.Map{}}
+
 	if testmode {
 		slog.Info("Test mode enabled", "INFO", 0)
 
 		// The current test cases will have
-		retval.databases.Store("db1", collection{&sync.Map{}})
-		retval.databases.Store("db2", collection{&sync.Map{}})
+		retval.databases.Store("db1", collection.New())
+		retval.databases.Store("db2", collection.New())
 	}
+
 	return retval
 }
 
@@ -198,11 +57,10 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.Put(w, r)
 	case http.MethodPost:
 		d.Post(w, r)
-	// Post handling
 	//case http.MethodPatch:
 	// Patch handling
-	//case http.MethodDelete:
-	// Delete handling
+	case http.MethodDelete:
+		d.Delete(w, r)
 	case http.MethodOptions:
 		d.Options(w, r)
 	default:
@@ -215,6 +73,7 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Handles case where we recieve a GET request.
 func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
@@ -241,14 +100,6 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	} else if splitpath[1] == "" {
 		// GET Database
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -261,20 +112,12 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		database.(collection).collectionGet(w, r)
+		database.(collection.Collection).CollectionGet(w, r)
 
 	} else {
 		// GET Document
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
 		path = splitpath[1]
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -289,7 +132,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 
 		// Get document
 		// for checkpoint 1, we assume that path will always be a document name
-		doc, ok := database.(collection).documents.Load(path)
+		doc, ok := database.(collection.Collection).Documents.Load(path)
 		if !ok {
 			slog.Info("User attempted to access non-extant document", "doc", path)
 			msg := fmt.Sprintf("Document does not exist")
@@ -297,7 +140,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		doc.(document).documentGet(w, r)
+		doc.(document.Document).DocumentGet(w, r)
 	}
 }
 
@@ -321,47 +164,12 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	if len(splitpath) == 1 {
 		// PUT database case
-		dbpath, err := decoder.PercentDecoding(splitpath[0])
+		dbpath := splitpath[0]
 
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-
-		// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
-		_, loaded := d.databases.LoadOrStore(dbpath, collection{&sync.Map{}})
-		if loaded {
-			slog.Error("Database already exists")
-			http.Error(w, "Database already exists", http.StatusBadRequest)
-			return
-		} else {
-			jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
-			if err != nil {
-				// This should never happen
-				slog.Error("Get: error marshaling", "error", err)
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return
-			}
-			slog.Info("Created Database", "path", dbpath)
-			w.WriteHeader(http.StatusCreated)
-			w.Header().Set("Location", r.URL.Path)
-			w.Write(jsonResponse)
-			return
-		}
-
+		d.putDB(w, r, dbpath)
 	} else {
 		// PUT document or collection
 		dbpath, _ := strings.CutSuffix(splitpath[0], "/")
-		dbpath, err := decoder.PercentDecoding(dbpath)
-
-		// Error messages printed in percentDecoding function
-		if err != nil {
-			msg := fmt.Sprintf("Error translating hex encoding: %s", err.Error())
-			http.Error(w, msg, http.StatusBadRequest)
-			return
-		}
 
 		// Access the database
 		database, ok := d.databases.Load(dbpath)
@@ -374,8 +182,171 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		database.(collection).documentPut(w, r, splitpath[1])
+		database.(collection.Collection).DocumentPut(w, r, splitpath[1], d.schema)
 	}
+}
+
+// Puts a new top level database into our handler
+func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string) {
+	// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
+	_, loaded := d.databases.LoadOrStore(dbpath, collection.New())
+	if loaded {
+		slog.Error("Database already exists")
+		http.Error(w, "Database already exists", http.StatusBadRequest)
+		return
+	} else {
+		jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		slog.Info("Created Database", "path", dbpath)
+		w.Header().Set("Location", r.URL.Path)
+		w.WriteHeader(http.StatusCreated)
+		w.Write(jsonResponse)
+		return
+	}
+}
+
+// Handles case where we have DELETE request.
+func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
+
+	if r.URL.Path == "/auth" {
+		// Logout case
+		isValidToken := d.validateToken(w, r)
+		if isValidToken {
+			// Remove the corresponding userInfo from the sessions map
+			d.sessions.Delete(r.Header.Get("Authorization"))
+			w.WriteHeader(http.StatusNoContent)
+			slog.Info("user is successfully removed")
+			return
+		}
+	} else {
+		// Set headers of response
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+
+		// Check for version
+		if !found {
+			slog.Info("User path did not include version", "path", path)
+			msg := fmt.Sprintf("path missing version: %s", path)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		splitpath := strings.SplitAfterN(path, "/", 2)
+
+		dbpath := splitpath[0]
+
+		// Check to see if database exists
+		database, ok := d.databases.Load(dbpath)
+		// If the database does not exist, return StatusNotFound error
+		if !ok {
+			slog.Info("User attempted to access non-extant database", "db", dbpath)
+			msg := fmt.Sprintf("Database does not exist")
+			http.Error(w, msg, http.StatusNotFound)
+			return
+		}
+
+		if len(splitpath) == 1 {
+			// DELETE database case
+			d.databases.Delete(dbpath)
+			slog.Info("Deleted Database", "path", dbpath)
+			w.Header().Set("Location", r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+			return
+
+		} else {
+			// DELETE document case
+			// Decode the document name
+			docpath, _ := strings.CutSuffix(splitpath[1], "/")
+
+			database.(collection.Collection).DocumentDelete(w, r, docpath)
+		}
+	}
+}
+
+// Handles case where we have POST request.
+func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
+
+	if r.URL.Path == "/auth" {
+		// Login request case
+
+		// Set headers of response
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// Read body of requests
+		desc, err := io.ReadAll(r.Body)
+		defer r.Body.Close()
+		if err != nil {
+			slog.Error("Login: error reading the request body", "error", err)
+			http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+			return
+		}
+
+		// Read Body data
+		var userInfo map[string]string
+		err = json.Unmarshal(desc, &userInfo)
+		if err != nil {
+			slog.Error("Login: error unmarshaling request", "error", err)
+			http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+			return
+		}
+
+		// I am pretty sure we do not need to validate the login request.
+		// Validate against schema
+		err = d.schema.Validate(userInfo)
+		if err != nil {
+			slog.Error("Login: request body did not conform to schema", "error", err)
+			http.Error(w, `"Login: request body did not conform to schema"`, http.StatusBadRequest)
+			return
+		}
+
+		// Generate a secure, random token
+		token, err := generateToken()
+		if err != nil {
+			slog.Error("Login: token not successfully generated", "error", err)
+			http.Error(w, "Login: token not successfully generated", http.StatusInternalServerError)
+			return
+		}
+
+		// I think we should get the username with the JSON visitor model.
+		// Store username and token in a session map with expiration time
+		username := userInfo["username"]
+		d.sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
+
+		// Return the token to the user
+		jsonToken, err := json.Marshal(map[string]string{"token": token})
+		if err != nil {
+			// This should never happen
+			slog.Error("Login: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonToken)
+		slog.Info("Login: success")
+	} else {
+		// Handle other cases
+	}
+}
+
+// generateToken is a helper function that generates a secure, random token
+func generateToken() (string, error) {
+	// 128 bits
+	token := make([]byte, 16)
+	// Fill the slide with cryptographically secure random bytes
+	_, err := rand.Read(token)
+	if err != nil {
+		return "", err
+	}
+	// Convert the random bytes to a hexadecimal string
+	return hex.EncodeToString(token), nil
 }
 
 // Handles case where we have OPTIONS request.
@@ -387,30 +358,35 @@ func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Handles case where we have POST request.
-func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
-	// Set headers of response
-	// TODO: can we put all header information in the start?
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+type SessionInfo struct {
+	Username  string
+	ExpiresAt time.Time
+}
 
-	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
-
-	// Check for version
-	if !found {
-		slog.Info("User path did not include version", "path", path)
-		msg := fmt.Sprintf("path missing version: %s", path)
-		http.Error(w, msg, http.StatusBadRequest)
+func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
+	// check whether token is missing
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		slog.Info("token is missing", "token", token)
+		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+		return false
 	}
 
-	// Check that its a AUTH or POST Database request
-	splitpath := strings.SplitAfterN(path, "/", 2)
-
-	if len(splitpath) == 2 && splitpath[1] == "" {
-		// POST database
-		// Navigate to path (TODO create)
-		// Generate a random name (TODO create)
-		// Verify that directory does not have that name
-		// Return new idss
+	// Validate token and expiration in sessions map
+	userInfo, ok := d.sessions.Load(token)
+	if ok {
+		if !userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
+			// token has expired
+			slog.Info("token has expired")
+			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+			return false
+		} else {
+			return true
+		}
+	} else {
+		// token does not exist
+		slog.Info("token does not exist")
+		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+		return false
 	}
 }
