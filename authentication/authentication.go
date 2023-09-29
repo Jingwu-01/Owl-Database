@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -29,7 +30,7 @@ func generateToken() (string, error) {
 }
 
 // validateToken tells if a token in a request is valid
-func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
+func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) bool {
 	// Check if the token is missing
 	token := r.Header.Get("Authorization")
 	if token == "" {
@@ -39,7 +40,7 @@ func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	// Validate token and expiration in sessions map
-	userInfo, ok := d.sessions.Load(token)
+	userInfo, ok := sessions.Load(token)
 	if ok {
 		if !userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
 			// token has expired
@@ -59,7 +60,7 @@ func (d *Dbhandler) validateToken(w http.ResponseWriter, r *http.Request) bool {
 }
 
 // Login request
-func (d *Dbhandler) Login(w http.ResponseWriter, r *http.Request) {
+func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -91,7 +92,7 @@ func (d *Dbhandler) Login(w http.ResponseWriter, r *http.Request) {
 	// I think we should get the username with the JSON visitor model.
 	// Store username and token in a session map with expiration time
 	username := userInfo["username"]
-	d.sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
+	sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
 
 	// Return the token to the user
 	jsonToken, err := json.Marshal(map[string]string{"token": token})
@@ -107,11 +108,11 @@ func (d *Dbhandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout request
-func (d *Dbhandler) Logout(w http.ResponseWriter, r *http.Request) {
-	isValidToken := d.validateToken(w, r)
+func Logout(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
+	isValidToken := validateToken(sessions, w, r)
 	if isValidToken {
 		// Remove the corresponding userInfo from the sessions map
-		d.sessions.Delete(r.Header.Get("Authorization"))
+		sessions.Delete(r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusNoContent)
 		slog.Info("Logout: user is successfully removed")
 		return
