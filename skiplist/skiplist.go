@@ -192,10 +192,15 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		highestLocked := 1
 		valid := true
 		level := 0
+		prevKey := key
 
 		// Lock all predecessors
 		for ; valid && level <= topLevel; level++ {
-			preds[level].Lock()
+			if preds[level].key < prevKey {
+				preds[level].Lock()
+				prevKey = preds[level].key
+			}
+
 			highestLocked = level
 
 			// Check pred/succ still valid
@@ -289,10 +294,15 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 		highestLocked := -1
 		level := 0
 		valid := true
+		prevKey := key
 
 		for valid && (level <= topLevel) {
 			pred := preds[level]
-			pred.Lock()
+			if pred.key < prevKey {
+				pred.Lock()
+				prevKey = pred.key
+			}
+
 			highestLocked = level
 			successor := pred.next[level].Load() == victim
 			valid = !pred.marked.Load() && successor
