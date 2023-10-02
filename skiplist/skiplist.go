@@ -36,7 +36,7 @@ type Pair[K cmp.Ordered, V any] struct {
 type UpdateCheck[K cmp.Ordered, V any] func(key K, currValue V, exists bool) (newValue V, err error)
 
 // Creates an empty new skiplist object
-func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] {
+func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) SkipList[K, V] {
 	var head, tail node[K, V]
 
 	// Construct head node.
@@ -68,7 +68,7 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] 
 	ret.totalOps = &atomic.Int32{}
 	ret.totalOps.Store(0)
 
-	return &ret
+	return ret
 }
 
 // Creates a new node object.
@@ -243,7 +243,7 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		node.fullyLinked.Store(true)
 
 		// Selective unlock to only unlock the ones previous locked (reentrant)
-		slog.Info("Unlocking preds", "used", used)
+		slog.Debug("Unlocking preds", "used", used)
 		for _, i := range used {
 			preds[i].Unlock()
 		}
