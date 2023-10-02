@@ -253,12 +253,13 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 	}
 }
 
-func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
+func (s SkipList[K, V]) Remove(key K) (V, bool) {
 	slog.Debug("Called Remove", "key", key) // Call trace
 
 	isMarked := false
 	topLevel := -1
 	var victim *node[K, V]
+	var zero V
 
 	// Keep trying to remove until success/failure
 	for {
@@ -273,22 +274,22 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 			// First time through
 			if levelFound == -1 {
 				// Nothing found
-				return nil, false
+				return zero, false
 			}
 
 			if !victim.fullyLinked.Load() {
 				// Victim not fully inserted
-				return nil, false
+				return zero, false
 			}
 
 			if victim.marked.Load() {
 				// Victim already being removed
-				return nil, false
+				return zero, false
 			}
 
 			if victim.topLevel != levelFound {
 				// Not fully linked when found
-				return nil, false
+				return zero, false
 			}
 
 			topLevel = victim.topLevel
@@ -296,7 +297,7 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 			if victim.marked.Load() {
 				// Another call beat us
 				victim.Unlock()
-				return nil, false
+				return zero, false
 			}
 
 			victim.marked.Store(true)
@@ -351,7 +352,7 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 		}
 
 		s.totalOps.Add(1)
-		return victim, true
+		return victim.value, true
 	}
 }
 
