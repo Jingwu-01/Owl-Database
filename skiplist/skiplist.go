@@ -3,6 +3,7 @@ package skiplist
 import (
 	"cmp"
 	"context"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -40,7 +41,7 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] 
 
 	// Construct head node.
 	head.key = minKey
-	head.topLevel = max_level - 1
+	head.topLevel = max_level - 1 // Because indexing at 0.
 	head.marked = atomic.Bool{}
 	head.fullyLinked = atomic.Bool{}
 	head.marked.Store(false)
@@ -81,8 +82,7 @@ func newNode[K cmp.Ordered, V any](key K, val V, topLevel int) *node[K, V] {
 	newnode.key = key
 	newnode.value = val
 	newnode.topLevel = topLevel
-	// Will ask at LT if it can be to toplevel or has to be to max.
-	newnode.next = make([]atomic.Pointer[node[K, V]], topLevel)
+	newnode.next = make([]atomic.Pointer[node[K, V]], topLevel+1)
 
 	return &newnode
 }
@@ -140,7 +140,7 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
 	// Pick random top level
 	topLevel := 0
-	for rand.Float32() < 0.5 {
+	for rand.Float32() < 0.5 && topLevel < s.head.topLevel {
 		topLevel++
 	}
 
@@ -192,7 +192,7 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		level := 0
 
 		prevKey := key
-		used := make([]int, 1)
+		used := make([]int, 0)
 
 		// Lock all predecessors
 		for ; valid && level <= topLevel; level++ {
@@ -235,6 +235,7 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		node.fullyLinked.Store(true)
 
 		// Selective unlock to only unlock the ones previous locked (reentrant)
+		slog.Info("Unlocking preds", "used", used)
 		for _, i := range used {
 			preds[i].Unlock()
 		}

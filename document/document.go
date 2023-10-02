@@ -45,6 +45,7 @@ func New(path, user string, docBody map[string]interface{}) Document {
 	return Document{newOutput(path, user, docBody), &sync.Map{}}
 }
 
+// Overwrite the body of a document upon recieving a put.
 func (d *Document) Overwrite(docBody map[string]interface{}) {
 	existingDocOutput := d.Output
 	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
