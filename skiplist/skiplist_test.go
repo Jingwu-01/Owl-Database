@@ -169,3 +169,71 @@ func TestRemoveExists(t *testing.T) {
 		t.Fatalf("expected 6, true. got %d, %t", v, ok)
 	}
 }
+
+func TestRemoveRemoves(t *testing.T) {
+	// Setting log level.
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(h))
+
+	check := func(key int, val int, exists bool) (int, error) {
+		if exists {
+			return 0, errors.New("In list already")
+		} else {
+			return 6, nil
+		}
+	}
+
+	list := New[int, int](0, 10, 3)
+	list.Upsert(1, check)
+
+	v, ok := list.Remove(1)
+	if !ok || v != 6 {
+		t.Fatalf("expected 6, true. got %d, %t", v, ok)
+	}
+
+	_, ok = list.Find(1)
+	if ok {
+		t.Fatalf("expected false. got %t", ok)
+	}
+
+	ok, err := list.Upsert(1, check)
+	if !ok || err != nil {
+		t.Fatalf("expected true, nil. got %t, %s", ok, err.Error())
+	}
+
+}
+
+func TestRemoveDoesNotExist(t *testing.T) {
+	// Setting log level.
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(h))
+
+	check := func(key int, val int, exists bool) (int, error) {
+		if exists {
+			return 0, errors.New("In list already")
+		} else {
+			return 6, nil
+		}
+	}
+
+	list := New[int, int](0, 10, 3)
+	list.Upsert(1, check)
+
+	v, ok := list.Remove(2)
+	if ok {
+		t.Fatalf("expected _, false. got %d, %t", v, ok)
+	}
+}
+
+func TestRemoveEmpty(t *testing.T) {
+	list := New[int, int](0, 10, 3)
+
+	v, ok := list.Remove(1)
+	if ok {
+		t.Fatalf("expected _, false. got %d, %t", v, ok)
+	}
+}
+
+/*
+ * Find
+ */
