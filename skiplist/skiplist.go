@@ -138,9 +138,12 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 }
 
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
-	// Random top level
-	// TODO: random?
-	topLevel := rand.Intn(s.head.topLevel)
+	// Pick random top level
+	// TODO: level?
+	topLevel := 0
+	for rand.Float32() < 0.5 {
+		topLevel++
+	}
 
 	// Keep trying insert
 	for {
@@ -150,7 +153,6 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 			found := succs[levelFound]
 			if !found.marked.Load() {
 				// Node already exists (update case)
-				// TODO: ensure that a node's 'real' value only exists at the lowest level
 				// so only need to obtain found's lock
 				found.Lock()
 
@@ -180,7 +182,6 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		// Key not found, Lock all predecessors
 		// Decide to insert or not
 
-		// TODO: right place to place?
 		// declared for zero value
 		var def V
 		newV, err := check(key, def, false)
@@ -213,7 +214,6 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		}
 
 		// Insert node
-		// TODO: what is topLevel?
 		node := newNode(key, newV, topLevel)
 
 		// Set next pointers on each level
