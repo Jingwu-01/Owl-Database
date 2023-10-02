@@ -138,9 +138,11 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 }
 
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
-	// Random top level
-	// TODO: random?
-	topLevel := rand.Intn(s.head.topLevel)
+	// Pick random top level
+	topLevel := 0
+	for rand.Float32() < 0.5 {
+		topLevel++
+	}
 
 	// Keep trying insert
 	for {
@@ -150,7 +152,6 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 			found := succs[levelFound]
 			if !found.marked.Load() {
 				// Node already exists (update case)
-				// TODO: ensure that a node's 'real' value only exists at the lowest level
 				// so only need to obtain found's lock
 				found.Lock()
 
@@ -180,7 +181,6 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		// Key not found, Lock all predecessors
 		// Decide to insert or not
 
-		// TODO: right place to place?
 		// declared for zero value
 		var def V
 		newV, err := check(key, def, false)
@@ -188,19 +188,20 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 			return false, err
 		}
 
-		highestLocked := 1
 		valid := true
 		level := 0
+
 		prevKey := key
+		used := make([]int, 1)
 
 		// Lock all predecessors
 		for ; valid && level <= topLevel; level++ {
+			// Selective lock to not lock the same preds (reentrant)
 			if preds[level].key < prevKey {
 				preds[level].Lock()
 				prevKey = preds[level].key
+				used = append(used, level)
 			}
-
-			highestLocked = level
 
 			// Check pred/succ still valid
 			unmarked := !preds[level].marked.Load() && !succs[level].marked.Load()
@@ -210,15 +211,15 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 
 		if !valid {
 			// Pred/succ changed. Unlock and retry
-			for level = highestLocked; level >= 0; level-- {
-				preds[level].Unlock()
+			// Selective unlock to only unlock the ones previous locked (reentrant)
+			for _, i := range used {
+				preds[i].Unlock()
 			}
 
 			continue
 		}
 
 		// Insert node
-		// TODO: what is topLevel?
 		node := newNode(key, newV, topLevel)
 
 		// Set next pointers on each level
@@ -233,10 +234,11 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 
 		node.fullyLinked.Store(true)
 
-		// Unlock
-		for level = highestLocked; level >= 0; level-- {
-			preds[level].Unlock()
+		// Selective unlock to only unlock the ones previous locked (reentrant)
+		for _, i := range used {
+			preds[i].Unlock()
 		}
+
 		s.totalOps.Add(1)
 		return true, nil
 	}
@@ -291,30 +293,30 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 		}
 
 		// Victim found, lock predecessors
-		highestLocked := -1
 		level := 0
 		valid := true
 		prevKey := key
+		used := make([]int, 1)
 
 		for valid && (level <= topLevel) {
 			pred := preds[level]
+
+			// Selective locking (reentrant)
 			if pred.key < prevKey {
 				pred.Lock()
 				prevKey = pred.key
+				used = append(used, level)
 			}
 
-			highestLocked = level
 			successor := pred.next[level].Load() == victim
 			valid = !pred.marked.Load() && successor
 			level++
 		}
 
 		if !valid {
-			// Unlock
-			level = highestLocked
-			for level >= 0 {
-				preds[level].Unlock()
-				level--
+			// Selective unlock to only unlock the ones previous locked (reentrant)
+			for _, i := range used {
+				preds[i].Unlock()
 			}
 
 			// Predecessor changed, try again
@@ -331,10 +333,10 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 
 		// Unlock
 		victim.Unlock()
-		level = highestLocked
-		for level >= 0 {
-			preds[level].Unlock()
-			level--
+
+		// Selective unlock to only unlock the ones previous locked (reentrant)
+		for _, i := range used {
+			preds[i].Unlock()
 		}
 
 		s.totalOps.Add(1)
