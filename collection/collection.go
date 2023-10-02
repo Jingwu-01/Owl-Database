@@ -31,6 +31,7 @@ func New() Collection {
 
 // Gets a collection
 func (c Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
+	// we can use the query method once we've written
 	returnDocs := make([]document.Docoutput, 0)
 
 	// Add each docoutput to the docoutputs list
