@@ -30,7 +30,7 @@ type Docoutput struct {
 	Meta meta                   `json:"meta"`
 }
 
-func NewOutput(path, user string, docBody map[string]interface{}) Docoutput {
+func newOutput(path, user string, docBody map[string]interface{}) Docoutput {
 	return Docoutput{path, docBody, newMeta(user)}
 }
 
@@ -42,7 +42,7 @@ type Document struct {
 
 // Creates a new document.
 func New(path, user string, docBody map[string]interface{}) Document {
-	return Document{NewOutput(path, user, docBody), &sync.Map{}}
+	return Document{newOutput(path, user, docBody), &sync.Map{}}
 }
 
 func (d *Document) Overwrite(docBody map[string]interface{}) {
