@@ -40,7 +40,7 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] 
 
 	// Construct head node.
 	head.key = minKey
-	head.topLevel = max_level
+	head.topLevel = max_level - 1
 	head.marked = atomic.Bool{}
 	head.fullyLinked = atomic.Bool{}
 	head.marked.Store(false)
@@ -92,11 +92,11 @@ func (s SkipList[K, V]) find(key K) (int, []*node[K, V], []*node[K, V]) {
 	// Initialize vars for searching the list.
 	foundLevel := -1
 	pred := s.head
-	level := pred.topLevel
+	level := s.head.topLevel
 
-	// Initialize return values
-	preds := make([]*node[K, V], level)
-	succs := make([]*node[K, V], level)
+	// Initialize return values (+1 to account for 0)
+	preds := make([]*node[K, V], s.head.topLevel+1)
+	succs := make([]*node[K, V], s.head.topLevel+1)
 
 	// Find successor at each level.
 	for level >= 0 {
