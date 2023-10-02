@@ -89,6 +89,8 @@ func newNode[K cmp.Ordered, V any](key K, val V, topLevel int) *node[K, V] {
 
 // Helper method for Find, Upsert and Remove.
 func (s SkipList[K, V]) find(key K) (int, []*node[K, V], []*node[K, V]) {
+	slog.Debug("Called find", "key", key) // Call trace
+
 	// Initialize vars for searching the list.
 	foundLevel := -1
 	pred := s.head
@@ -126,6 +128,8 @@ func (s SkipList[K, V]) find(key K) (int, []*node[K, V], []*node[K, V]) {
 
 // Finds the value corresponding to key K in s.
 func (s SkipList[K, V]) Find(key K) (V, bool) {
+	slog.Debug("Called Find", "key", key) // Call trace
+
 	levelFound, _, succs := s.find(key)
 
 	if levelFound == -1 {
@@ -138,11 +142,15 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 }
 
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
+	slog.Debug("Called Upsert", "key", key) // Call trace
+
 	// Pick random top level
 	topLevel := 0
 	for rand.Float32() < 0.5 && topLevel < s.head.topLevel {
 		topLevel++
 	}
+
+	slog.Debug("Output level chosen", "level", topLevel, "key", key)
 
 	// Keep trying insert
 	for {
@@ -152,14 +160,14 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 			found := succs[levelFound]
 			if !found.marked.Load() {
 				// Node already exists (update case)
-				// so only need to obtain found's lock
-				found.Lock()
 
-				// Recheck once lock is obtained
-				if !found.marked.Load() {
-					found.Unlock()
-					continue
+				// Need to wait for node to be fully linked if currently being added.
+				for !found.fullyLinked.Load() {
+
 				}
+
+				// Only need to obtain found's lock for update
+				found.Lock()
 
 				// Use updatecheck to either update or ignore
 				newV, err := check(found.key, found.value, true)
@@ -246,6 +254,8 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 }
 
 func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
+	slog.Debug("Called Remove", "key", key) // Call trace
+
 	isMarked := false
 	topLevel := -1
 	var victim *node[K, V]
@@ -346,6 +356,8 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 }
 
 func (s SkipList[K, V]) Query(ctx context.Context, start K, end K) (results []Pair[K, V], err error) {
+	slog.Debug("Called Query", "start", start, "end", end) // Call trace
+
 	// Repeatedly make queries
 	for {
 		// Use a counter to check that a write has not done

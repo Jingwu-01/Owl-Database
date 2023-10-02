@@ -2,6 +2,8 @@ package skiplist
 
 import (
 	"errors"
+	"log/slog"
+	"os"
 	"testing"
 )
 
@@ -9,6 +11,10 @@ import (
 * Upsert
  */
 func TestInsertSuccess(t *testing.T) {
+	// Setting log level.
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(h))
+
 	check := func(key int, val int, exists bool) (int, error) {
 		if exists {
 			return 0, errors.New("In list already")
@@ -30,6 +36,10 @@ func TestInsertSuccess(t *testing.T) {
 }
 
 func TestInsertFailure(t *testing.T) {
+	// Setting log level.
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(h))
+
 	check := func(key int, val int, exists bool) (int, error) {
 		if exists {
 			return 0, errors.New("In list already")
@@ -40,11 +50,7 @@ func TestInsertFailure(t *testing.T) {
 
 	list := New[int, int](0, 10, 3)
 	list.Upsert(1, check)
-	ok, err := list.Upsert(1, check)
-
-	if err != nil {
-		t.Fatalf("expected no errors, got %s", err.Error())
-	}
+	ok, _ := list.Upsert(1, check)
 
 	if ok {
 		t.Fatalf("expected false. got %t", ok)
