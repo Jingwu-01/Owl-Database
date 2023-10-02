@@ -17,36 +17,49 @@ type Patch struct {
 
 // A struct that visits a document and applies a patch to it.
 type PatchVisitor struct {
-	patch Patch
+	patch      Patch
+	currPath   string
+	patchedDoc map[string]interface{}
 }
 
 // Creates a new patch visitor struct for this patch.
-func New(patches Patch) PatchVisitor {
-	return PatchVisitor{patches}
+func new(patch Patch) PatchVisitor {
+	vis := PatchVisitor{}
+	vis.patch = patch
+	vis.currPath = strings.TrimPrefix(patch.Path, "/")
+	return vis
+}
+
+// Applys the provided patch to the provided document.
+func ApplyPatch(doc map[string]interface{}, patch Patch) map[string]interface{} {
+	patcher := new(patch)
+	jsonvisit.Accept(doc, patcher)
+	return patcher.patchedDoc
 }
 
 // Handles visiting a JSON object with this patch struct.
 func (p PatchVisitor) Map(m map[string]any) (bool, error) {
 	// Case where we have not reached the final key yet
-	if p.patch.Path != "" {
+	if p.currPath != "" {
 		// Process the string
-		cutpath := strings.TrimPrefix(p.patch.Path, "/")
-		splitpath := strings.SplitAfterN(cutpath, "/", 2)
+		splitpath := strings.SplitAfterN(p.currPath, "/", 2)
 
 		// Top level key
 		targetKey := splitpath[0]
 
 		// Store rest of path in the patch object, empty tells us we're in target location.
 		if len(splitpath) == 1 {
-			p.patch.Path = ""
+			p.currPath = ""
 		} else {
-			p.patch.Path = splitpath[1]
+			p.currPath = splitpath[1]
 		}
 
 		// Iterate over keys and only go deeper on target one.
 		for key, val := range m {
 			if key == targetKey {
 				return jsonvisit.Accept(val, p)
+			} else {
+				p.patchedDoc[key] = val
 			}
 		}
 
@@ -70,7 +83,7 @@ func (p PatchVisitor) Map(m map[string]any) (bool, error) {
 
 // Handles visiting a slice with this patch.
 func (p PatchVisitor) Slice(s []any) (bool, error) {
-	if p.patch.Path != "" {
+	if p.currPath != "" {
 		// Case where we find a slice before we expect it.
 		return false, errors.New("Reached array before end of path")
 	} else if p.patch.Op == "ArrayAdd" {
