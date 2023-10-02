@@ -308,7 +308,7 @@ func (s SkipList[K, V]) Remove(key K) (V, bool) {
 		level := 0
 		valid := true
 		prevKey := key
-		used := make([]int, 1)
+		used := make([]int, 0)
 
 		for valid && (level <= topLevel) {
 			pred := preds[level]
