@@ -5,13 +5,12 @@ package dbhandler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -212,6 +211,7 @@ func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string)
 func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/auth" {
 		// logout
+		authentication.Logout(d.sessions, w, r)
 	} else {
 		// Set headers of response
 		w.Header().Set("Content-Type", "application/json")
@@ -261,65 +261,9 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Handles case where we have POST request.
 func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
-
 	if r.URL.Path == "/auth" {
-		// Login request case
-
-		// Set headers of response
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		// Read body of requests
-		desc, err := io.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			slog.Error("Login: error reading the request body", "error", err)
-			http.Error(w, `"invalid login format"`, http.StatusBadRequest)
-			return
-		}
-
-		// Read Body data
-		var userInfo map[string]string
-		err = json.Unmarshal(desc, &userInfo)
-		if err != nil {
-			slog.Error("Login: error unmarshaling request", "error", err)
-			http.Error(w, `"invalid login format"`, http.StatusBadRequest)
-			return
-		}
-
-		// I am pretty sure we do not need to validate the login request.
-		// Validate against schema
-		err = d.schema.Validate(userInfo)
-		if err != nil {
-			slog.Error("Login: request body did not conform to schema", "error", err)
-			http.Error(w, `"Login: request body did not conform to schema"`, http.StatusBadRequest)
-			return
-		}
-
-		// Generate a secure, random token
-		token, err := generateToken()
-		if err != nil {
-			slog.Error("Login: token not successfully generated", "error", err)
-			http.Error(w, "Login: token not successfully generated", http.StatusInternalServerError)
-			return
-		}
-
-		// I think we should get the username with the JSON visitor model.
-		// Store username and token in a session map with expiration time
-		username := userInfo["username"]
-		d.sessions.Store(token, sessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
-
-		// Return the token to the user
-		jsonToken, err := json.Marshal(map[string]string{"token": token})
-		if err != nil {
-			// This should never happen
-			slog.Error("Login: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonToken)
-		slog.Info("Login: success")
+		// login
+		authentication.Login(d.sessions, w, r)
 	} else {
 		// Handle other cases
 	}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,10 +33,20 @@ func generateToken() (string, error) {
 // validateToken tells if a token in a request is valid
 func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) bool {
 	// Check if the token is missing
-	token := r.Header.Get("Authorization")
+	authValue := r.Header.Get("Authorization")
+	parts := strings.Split(authValue, " ")
+
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		// Missing or malformed bearer token
+		slog.Info("validateToken: missing or malformed bearer token", "token", authValue)
+		http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
+		return false
+	}
+	token := parts[1]
+
 	if token == "" {
 		slog.Info("validateToken: token is missing", "token", token)
-		http.Error(w, "Missing bearer token", http.StatusUnauthorized)
+		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
 		return false
 	}
 
@@ -45,7 +56,7 @@ func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) b
 		if !userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
 			// token has expired
 			slog.Info("validateToken: token has expired")
-			http.Error(w, "Expired bearer token", http.StatusUnauthorized)
+			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
 			return false
 		} else {
 			// token is valid
@@ -54,7 +65,7 @@ func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) b
 	} else {
 		// token does not exist
 		slog.Info("validateToken: token does not exist")
-		http.Error(w, "Invalid bearer token", http.StatusUnauthorized)
+		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
 		return false
 	}
 }
@@ -70,7 +81,7 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		slog.Error("Login: error reading the request body", "error", err)
-		http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+		http.Error(w, "invalid login format", http.StatusBadRequest)
 		return
 	}
 	var userInfo map[string]string
@@ -78,6 +89,15 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("Login: error unmarshaling request", "error", err)
 		http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+		return
+	}
+
+	// I think we should get the username with the JSON visitor model.
+	// Store username and token in a session map with expiration time
+	username := userInfo["username"]
+	if username == "" {
+		slog.Error("Login: no username in request body", "error", err)
+		http.Error(w, "No username in request body", http.StatusBadRequest)
 		return
 	}
 
@@ -89,13 +109,11 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// I think we should get the username with the JSON visitor model.
-	// Store username and token in a session map with expiration time
-	username := userInfo["username"]
 	sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
 
 	// Return the token to the user
 	jsonToken, err := json.Marshal(map[string]string{"token": token})
+	// jsonToken, err := json.Marshal(sessions)
 	if err != nil {
 		// This should never happen
 		slog.Error("Login: error marshaling", "error", err)
@@ -109,11 +127,27 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 
 // Logout request
 func Logout(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
+	// Set headers of response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	isValidToken := validateToken(sessions, w, r)
 	if isValidToken {
 		// Remove the corresponding userInfo from the sessions map
-		sessions.Delete(r.Header.Get("Authorization"))
+		authValue := r.Header.Get("Authorization")
+		parts := strings.Split(authValue, " ")
+
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			// Missing or malformed bearer token
+			slog.Info("Logout: missing or malformed bearer token", "token", authValue)
+			http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
+			return
+		}
+		token := parts[1]
+
+		sessions.Delete(token)
 		w.WriteHeader(http.StatusNoContent)
+
 		slog.Info("Logout: user is successfully removed")
 		return
 	}
