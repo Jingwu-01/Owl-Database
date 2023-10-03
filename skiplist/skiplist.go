@@ -3,6 +3,7 @@ package skiplist
 import (
 	"cmp"
 	"context"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -35,12 +36,12 @@ type Pair[K cmp.Ordered, V any] struct {
 type UpdateCheck[K cmp.Ordered, V any] func(key K, currValue V, exists bool) (newValue V, err error)
 
 // Creates an empty new skiplist object
-func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] {
+func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) SkipList[K, V] {
 	var head, tail node[K, V]
 
 	// Construct head node.
 	head.key = minKey
-	head.topLevel = max_level
+	head.topLevel = max_level - 1 // Because indexing at 0.
 	head.marked = atomic.Bool{}
 	head.fullyLinked = atomic.Bool{}
 	head.marked.Store(false)
@@ -67,7 +68,7 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) *SkipList[K, V] 
 	ret.totalOps = &atomic.Int32{}
 	ret.totalOps.Store(0)
 
-	return &ret
+	return ret
 }
 
 // Creates a new node object.
@@ -81,22 +82,23 @@ func newNode[K cmp.Ordered, V any](key K, val V, topLevel int) *node[K, V] {
 	newnode.key = key
 	newnode.value = val
 	newnode.topLevel = topLevel
-	// Will ask at LT if it can be to toplevel or has to be to max.
-	newnode.next = make([]atomic.Pointer[node[K, V]], topLevel)
+	newnode.next = make([]atomic.Pointer[node[K, V]], topLevel+1)
 
 	return &newnode
 }
 
 // Helper method for Find, Upsert and Remove.
 func (s SkipList[K, V]) find(key K) (int, []*node[K, V], []*node[K, V]) {
+	slog.Debug("Called find", "key", key) // Call trace
+
 	// Initialize vars for searching the list.
 	foundLevel := -1
 	pred := s.head
-	level := pred.topLevel
+	level := s.head.topLevel
 
-	// Initialize return values
-	preds := make([]*node[K, V], level)
-	succs := make([]*node[K, V], level)
+	// Initialize return values (+1 to account for 0)
+	preds := make([]*node[K, V], s.head.topLevel+1)
+	succs := make([]*node[K, V], s.head.topLevel+1)
 
 	// Find successor at each level.
 	for level >= 0 {
@@ -126,6 +128,8 @@ func (s SkipList[K, V]) find(key K) (int, []*node[K, V], []*node[K, V]) {
 
 // Finds the value corresponding to key K in s.
 func (s SkipList[K, V]) Find(key K) (V, bool) {
+	slog.Debug("Called Find", "key", key) // Call trace
+
 	levelFound, _, succs := s.find(key)
 
 	if levelFound == -1 {
@@ -138,9 +142,15 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 }
 
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
-	// Random top level
-	// TODO: random?
-	topLevel := rand.Intn(s.head.topLevel)
+	slog.Debug("Called Upsert", "key", key) // Call trace
+
+	// Pick random top level
+	topLevel := 0
+	for rand.Float32() < 0.5 && topLevel < s.head.topLevel {
+		topLevel++
+	}
+
+	slog.Debug("Output level chosen", "level", topLevel, "key", key)
 
 	// Keep trying insert
 	for {
@@ -150,15 +160,14 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 			found := succs[levelFound]
 			if !found.marked.Load() {
 				// Node already exists (update case)
-				// TODO: ensure that a node's 'real' value only exists at the lowest level
-				// so only need to obtain found's lock
-				found.Lock()
 
-				// Recheck once lock is obtained
-				if !found.marked.Load() {
-					found.Unlock()
-					continue
+				// Need to wait for node to be fully linked if currently being added.
+				for !found.fullyLinked.Load() {
+
 				}
+
+				// Only need to obtain found's lock for update
+				found.Lock()
 
 				// Use updatecheck to either update or ignore
 				newV, err := check(found.key, found.value, true)
@@ -180,7 +189,6 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		// Key not found, Lock all predecessors
 		// Decide to insert or not
 
-		// TODO: right place to place?
 		// declared for zero value
 		var def V
 		newV, err := check(key, def, false)
@@ -188,19 +196,20 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 			return false, err
 		}
 
-		highestLocked := 1
 		valid := true
 		level := 0
+
 		prevKey := key
+		used := make([]int, 0)
 
 		// Lock all predecessors
 		for ; valid && level <= topLevel; level++ {
+			// Selective lock to not lock the same preds (reentrant)
 			if preds[level].key < prevKey {
 				preds[level].Lock()
 				prevKey = preds[level].key
+				used = append(used, level)
 			}
-
-			highestLocked = level
 
 			// Check pred/succ still valid
 			unmarked := !preds[level].marked.Load() && !succs[level].marked.Load()
@@ -210,15 +219,15 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 
 		if !valid {
 			// Pred/succ changed. Unlock and retry
-			for level = highestLocked; level >= 0; level-- {
-				preds[level].Unlock()
+			// Selective unlock to only unlock the ones previous locked (reentrant)
+			for _, i := range used {
+				preds[i].Unlock()
 			}
 
 			continue
 		}
 
 		// Insert node
-		// TODO: what is topLevel?
 		node := newNode(key, newV, topLevel)
 
 		// Set next pointers on each level
@@ -233,19 +242,24 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 
 		node.fullyLinked.Store(true)
 
-		// Unlock
-		for level = highestLocked; level >= 0; level-- {
-			preds[level].Unlock()
+		// Selective unlock to only unlock the ones previous locked (reentrant)
+		slog.Debug("Unlocking preds", "used", used)
+		for _, i := range used {
+			preds[i].Unlock()
 		}
+
 		s.totalOps.Add(1)
 		return true, nil
 	}
 }
 
-func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
+func (s SkipList[K, V]) Remove(key K) (V, bool) {
+	slog.Debug("Called Remove", "key", key) // Call trace
+
 	isMarked := false
 	topLevel := -1
 	var victim *node[K, V]
+	var zero V
 
 	// Keep trying to remove until success/failure
 	for {
@@ -260,22 +274,22 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 			// First time through
 			if levelFound == -1 {
 				// Nothing found
-				return nil, false
+				return zero, false
 			}
 
 			if !victim.fullyLinked.Load() {
 				// Victim not fully inserted
-				return nil, false
+				return zero, false
 			}
 
 			if victim.marked.Load() {
 				// Victim already being removed
-				return nil, false
+				return zero, false
 			}
 
 			if victim.topLevel != levelFound {
 				// Not fully linked when found
-				return nil, false
+				return zero, false
 			}
 
 			topLevel = victim.topLevel
@@ -283,7 +297,7 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 			if victim.marked.Load() {
 				// Another call beat us
 				victim.Unlock()
-				return nil, false
+				return zero, false
 			}
 
 			victim.marked.Store(true)
@@ -291,30 +305,30 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 		}
 
 		// Victim found, lock predecessors
-		highestLocked := -1
 		level := 0
 		valid := true
 		prevKey := key
+		used := make([]int, 0)
 
 		for valid && (level <= topLevel) {
 			pred := preds[level]
+
+			// Selective locking (reentrant)
 			if pred.key < prevKey {
 				pred.Lock()
 				prevKey = pred.key
+				used = append(used, level)
 			}
 
-			highestLocked = level
 			successor := pred.next[level].Load() == victim
 			valid = !pred.marked.Load() && successor
 			level++
 		}
 
 		if !valid {
-			// Unlock
-			level = highestLocked
-			for level >= 0 {
-				preds[level].Unlock()
-				level--
+			// Selective unlock to only unlock the ones previous locked (reentrant)
+			for _, i := range used {
+				preds[i].Unlock()
 			}
 
 			// Predecessor changed, try again
@@ -331,18 +345,20 @@ func (s SkipList[K, V]) Remove(key K) (*node[K, V], bool) {
 
 		// Unlock
 		victim.Unlock()
-		level = highestLocked
-		for level >= 0 {
-			preds[level].Unlock()
-			level--
+
+		// Selective unlock to only unlock the ones previous locked (reentrant)
+		for _, i := range used {
+			preds[i].Unlock()
 		}
 
 		s.totalOps.Add(1)
-		return victim, true
+		return victim.value, true
 	}
 }
 
 func (s SkipList[K, V]) Query(ctx context.Context, start K, end K) (results []Pair[K, V], err error) {
+	slog.Debug("Called Query", "start", start, "end", end) // Call trace
+
 	// Repeatedly make queries
 	for {
 		// Use a counter to check that a write has not done
