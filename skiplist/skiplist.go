@@ -1,3 +1,5 @@
+// Package skiplist implements the skiplist interface
+// as specified by the owlDB api.
 package skiplist
 
 import (

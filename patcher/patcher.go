@@ -1,3 +1,6 @@
+// Package patcher provides a struct to marshal
+// patches and a method to apply an input patch
+// to an input document.
 package patcher
 
 import (
@@ -12,33 +15,34 @@ import (
 type Patch struct {
 	Op    string
 	Path  string
-	Value map[string]interface{}
+	Value interface{}
 }
 
 // A struct that visits a document and applies a patch to it.
-type PatchVisitor struct {
+type patchVisitor struct {
 	patch      Patch
 	currPath   string
 	patchedDoc map[string]interface{}
 }
 
 // Creates a new patch visitor struct for this patch.
-func new(patch Patch) PatchVisitor {
-	vis := PatchVisitor{}
+func new(patch Patch) patchVisitor {
+	vis := patchVisitor{}
 	vis.patch = patch
 	vis.currPath = strings.TrimPrefix(patch.Path, "/")
 	return vis
 }
 
 // Applys the provided patch to the provided document.
-func ApplyPatch(doc map[string]interface{}, patch Patch) map[string]interface{} {
+func ApplyPatch(doc map[string]interface{}, patch Patch) (map[string]interface{}, bool, error) {
 	patcher := new(patch)
-	jsonvisit.Accept(doc, &patcher)
-	return patcher.patchedDoc
+	patcher.patchedDoc = doc
+	succ, err := jsonvisit.Accept(doc, &patcher)
+	return patcher.patchedDoc, succ, err
 }
 
 // Handles visiting a JSON object with this patch struct.
-func (p *PatchVisitor) Map(m map[string]any) (bool, error) {
+func (p *patchVisitor) Map(m map[string]any) (bool, error) {
 	// Case where we have not reached the final key yet
 	if p.currPath != "" {
 		// Process the string
@@ -48,20 +52,34 @@ func (p *PatchVisitor) Map(m map[string]any) (bool, error) {
 		targetKey := splitpath[0]
 
 		// Store rest of path in the patch object, empty tells us we're in target location.
-		if len(splitpath) == 1 {
+		if len(splitpath) == 1 && p.patch.Op == "ObjectAdd" {
+			// Check if key is in there or not
+			for key := range m {
+				if key == targetKey {
+					return true, nil
+				}
+			}
+
+			// If key is not in there, we are now confident that we have all the steps in the
+			// path and can add the object.
+			// Find the proper dictionary to add to.
+			prepath := strings.TrimPrefix(strings.TrimSuffix(p.patch.Path, p.currPath), "/")
+			cutpath := strings.Split(prepath, "/")
+
+			dict := p.patchedDoc
+			for _, key := range cutpath[:len(cutpath)-1] {
+				dict = dict[key].(map[string]interface{})
+			}
+
+			// Once in target location, add item
+			dict[targetKey] = p.patch.Value
+			return true, nil
+		} else if len(splitpath) == 1 {
+			// Should be ArrayAdd or ArrayRemove - have to find array at target key.
 			p.currPath = ""
 		} else {
+			// Keep going deeper into list
 			p.currPath = splitpath[1]
-		}
-
-		// Find the proper dictionary to add to.
-		prepath := strings.TrimPrefix(strings.TrimSuffix(p.patch.Path, p.currPath), "/")
-		cutpath := strings.Split(prepath, "/")
-
-		dict := p.patchedDoc
-		for _, key := range cutpath {
-			val := dict[key]
-			dict = val.(map[string]interface{})
 		}
 
 		// Iterate over keys and only go deeper on target one.
@@ -72,8 +90,7 @@ func (p *PatchVisitor) Map(m map[string]any) (bool, error) {
 				if !ok {
 					return ok, err
 				}
-			} else {
-				dict[key] = val
+				break
 			}
 		}
 
@@ -85,101 +102,82 @@ func (p *PatchVisitor) Map(m map[string]any) (bool, error) {
 			return true, nil
 		}
 	} else {
-		// We've reached the target object.
-		if p.patch.Op != "ObjectAdd" {
-			// Attempting an invalid operation on this object
-			return false, errors.New("Invalid operation")
-		} else {
-			// Find the proper dictionary to add to.
-			prepath := strings.TrimPrefix(p.patch.Path, "/")
-			cutpath := strings.Split(prepath, "/")
-
-			dict := p.patchedDoc
-			for _, key := range cutpath {
-				val := dict[key]
-				dict = val.(map[string]interface{})
-			}
-
-			// Copy keys and vals into the document.
-			for key, val := range m {
-				dict[key] = val
-			}
-
-			// Copy patch into the document.
-			for key, val := range p.patch.Value {
-				dict[key] = val
-			}
-
-			return true, nil
-		}
+		msg := fmt.Sprintf("Expected target to be a slice.")
+		return false, errors.New(msg)
 	}
 }
 
 // Handles visiting a slice with this patch.
-func (p *PatchVisitor) Slice(s []any) (bool, error) {
+func (p *patchVisitor) Slice(s []any) (bool, error) {
 	if p.currPath != "" {
 		// Case where we find a slice before we expect it.
 		return false, errors.New("Reached array before end of path")
 	} else if p.patch.Op == "ArrayAdd" {
-		// Find the proper dictionary to add to.
-		prepath := strings.TrimPrefix(p.patch.Path, "/")
-		cutpath := strings.Split(prepath, "/")
-
-		dict := p.patchedDoc
-		for _, key := range cutpath[:len(cutpath)-1] {
-			val := dict[key]
-			dict = val.(map[string]interface{})
-		}
-
-		// Not sure if this is what we want to do.
-		s = append(s, p.patch.Value)
-
-		dict[cutpath[len(cutpath)-1]] = s
-
-		return true, nil
-	} else if p.patch.Op == "ArrayRemove" {
-		// Handle array remove.
-
-		// Find the proper dictionary to add to.
-		prepath := strings.TrimPrefix(p.patch.Path, "/")
-		cutpath := strings.Split(prepath, "/")
-
-		dict := p.patchedDoc
-		for _, key := range cutpath[:len(cutpath)-1] {
-			val := dict[key]
-			dict = val.(map[string]interface{})
-		}
-
-		for i, val := range s {
-			// Not sure if this is what we want to do.
+		// Check if key is in there or not
+		for _, val := range s {
 			if jsonvisit.Equal(val, p.patch.Value) {
-				s = append(s[:i], s[i+1:])
-				dict[cutpath[len(cutpath)-1]] = s
 				return true, nil
 			}
 		}
-		return false, errors.New("Element to remove not in the array")
+
+		newslice := append(s, p.patch.Value)
+
+		// If key is not in there, we are now confident that we have all the steps in the
+		// path and can add the object.
+		// Find the proper dictionary to add to.
+		prepath := strings.TrimPrefix(strings.TrimSuffix(p.patch.Path, p.currPath), "/")
+		cutpath := strings.Split(prepath, "/")
+
+		dict := p.patchedDoc
+		for _, key := range cutpath[:len(cutpath)-1] {
+			dict = dict[key].(map[string]interface{})
+		}
+
+		dict[cutpath[len(cutpath)-1]] = newslice
+
+		return true, nil
+	} else if p.patch.Op == "ArrayRemove" {
+		// Find the proper dictionary to add to.
+		prepath := strings.TrimPrefix(strings.TrimSuffix(p.patch.Path, p.currPath), "/")
+		cutpath := strings.Split(prepath, "/")
+
+		dict := p.patchedDoc
+		for _, key := range cutpath[:len(cutpath)-1] {
+			dict = dict[key].(map[string]interface{})
+		}
+
+		// Handle array remove.
+		for i, val := range s {
+			// Not sure if this is what we want to do.
+			if jsonvisit.Equal(val, p.patch.Value) {
+				newslice := append(s[:i], s[i+1:])
+				dict[cutpath[len(cutpath)-1]] = newslice
+				return true, nil
+			}
+		}
+		// Object wasn't in, but we still return true.
+		return true, nil
 	} else {
 		return false, errors.New("Invalid Operation")
 	}
 }
 
 // Handles visiting a bool with this patch.
-func (p *PatchVisitor) Bool(b bool) (bool, error) {
-	return false, errors.New("Path does not point to an object")
+func (p *patchVisitor) Bool(b bool) (bool, error) {
+	return false, errors.New("Path does not point to an object or slice")
 }
 
 // Handles visiting a float with this patch.
-func (p *PatchVisitor) Float64(f float64) (bool, error) {
-	return false, errors.New("Path does not point to an object")
+func (p *patchVisitor) Float64(f float64) (bool, error) {
+	return false, errors.New("Path does not point to an object or slice")
 }
 
 // Handles visiting a string with this patch.
-func (p *PatchVisitor) String(string) (bool, error) {
-	return false, errors.New("Path does not point to an object")
+func (p *patchVisitor) String(string) (bool, error) {
+	return false, errors.New("Path does not point to an object or slice")
 }
 
 // Handles visiting a null object with this patch.
-func (p *PatchVisitor) Null() (bool, error) {
-	return false, errors.New("Path does not point to an object")
+func (p *patchVisitor) Null() (bool, error) {
+	return false, errors.New("Path does not point to an object or slice")
 }

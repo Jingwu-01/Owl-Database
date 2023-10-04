@@ -1,5 +1,7 @@
-// A package implementing the highest level handling for
-// the OwlDB project.
+// Package dbhandler provides structs for handling
+// HTTP requests according to the owldb specifications.
+// Supports GET, PUT, POST, PATCH, DELETE, and OPTIONS
+// requests.
 package dbhandler
 
 import (
@@ -21,8 +23,9 @@ type putoutput struct {
 	Uri string `json:"uri"`
 }
 
-// A dbhandler is the highest level struct, holds all the collections and
-// handles all the http requests.
+// A dbhandler is the highest level struct, holds all the
+// base level databases as well as the schema and map of
+// usernames to authentication tokens.
 type Dbhandler struct {
 	databases *sync.Map
 	schema    *jsonschema.Schema
@@ -34,7 +37,7 @@ func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
 	retval := Dbhandler{&sync.Map{}, schema, &sync.Map{}}
 
 	if testmode {
-		slog.Info("Test mode enabled", "INFO", 0)
+		slog.Info("Test mode enabled")
 
 		// The current test cases will have
 		retval.databases.Store("db1", collection.New())

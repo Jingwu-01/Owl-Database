@@ -1,11 +1,17 @@
+// Package document implements the document functionality
+// as specified in the owlDB api. Includes several structs
+// and methods for manipulating a document.
 package document
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 )
 
 // A meta stores metadata about a document.
@@ -72,4 +78,37 @@ func (d Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(jsonDoc)
 	slog.Info("GET: success")
+}
+
+type PatchResponse struct {
+	Uri         string `json:"uri"`
+	PatchFailed bool   `json:"patchFailed"`
+	Message     string `json:"message"`
+}
+
+// Applys a slice of patches to this document.
+// Returns a PatchResponse without the Uri field
+// set, expecting it to be set by caller.
+func (d *Document) ApplyPatches(patches []patcher.Patch) PatchResponse {
+	var ret PatchResponse
+	var ok bool
+	var err error
+
+	newdoc := d.Output.Doc
+	for _, patch := range patches {
+		newdoc, ok, err = patcher.ApplyPatch(newdoc, patch)
+		if !ok {
+			str := fmt.Sprintf("Error applying patches: %s", err.Error())
+			ret.Message = str
+			ret.PatchFailed = true
+			return ret
+		}
+	}
+
+	d.Output.Doc = newdoc
+
+	// Successfully applied all the patches.
+	ret.Message = "patch applied"
+	ret.PatchFailed = false
+	return ret
 }
