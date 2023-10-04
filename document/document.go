@@ -31,9 +31,9 @@ A docoutput is a struct which represents the data to
 be output when a user requests a given document.
 */
 type Docoutput struct {
-	Path string                 `json:"path"`
-	Doc  map[string]interface{} `json:"doc"`
-	Meta meta                   `json:"meta"`
+	Path string      `json:"path"`
+	Doc  interface{} `json:"doc"`
+	Meta meta        `json:"meta"`
 }
 
 func newOutput(path, user string, docBody map[string]interface{}) Docoutput {
@@ -52,7 +52,7 @@ func New(path, user string, docBody map[string]interface{}) Document {
 }
 
 // Overwrite the body of a document upon recieving a put.
-func (d *Document) Overwrite(docBody map[string]interface{}) {
+func (d *Document) Overwrite(docBody interface{}) {
 	existingDocOutput := d.Output
 	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
 	existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
@@ -89,26 +89,26 @@ type PatchResponse struct {
 // Applys a slice of patches to this document.
 // Returns a PatchResponse without the Uri field
 // set, expecting it to be set by caller.
-func (d *Document) ApplyPatches(patches []patcher.Patch) PatchResponse {
+func (d Document) ApplyPatches(patches []patcher.Patch) (PatchResponse, interface{}) {
+	slog.Info("Applying patch to document", "path", d.Output.Path)
 	var ret PatchResponse
-	var ok bool
 	var err error
 
 	newdoc := d.Output.Doc
-	for _, patch := range patches {
-		newdoc, ok, err = patcher.ApplyPatch(newdoc, patch)
-		if !ok {
+	for i, patch := range patches {
+		newdoc, err = patcher.ApplyPatch(newdoc, patch)
+		slog.Debug("Patching", "patched doc", newdoc)
+		if err != nil {
+			slog.Info("Patch failed", "num", i)
 			str := fmt.Sprintf("Error applying patches: %s", err.Error())
 			ret.Message = str
 			ret.PatchFailed = true
-			return ret
+			return ret, nil
 		}
 	}
-
-	d.Output.Doc = newdoc
 
 	// Successfully applied all the patches.
 	ret.Message = "patch applied"
 	ret.PatchFailed = false
-	return ret
+	return ret, newdoc
 }

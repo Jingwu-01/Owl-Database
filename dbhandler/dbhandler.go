@@ -7,7 +7,6 @@ package dbhandler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -16,7 +15,6 @@ import (
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -322,57 +320,9 @@ func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusNotFound)
 		return
 	} else {
-		// Patch document case
 		// Decode the document name
 		docpath, _ := strings.CutSuffix(splitpath[1], "/")
-
-		doc, ok := database.(collection.Collection).Documents.Load(docpath)
-
-		// If document does not exist return error
-		if !ok {
-			slog.Info("User attempted to patch non-extant document", "doc", docpath)
-			msg := fmt.Sprintf("Document, %s, does not exist", docpath)
-			http.Error(w, msg, http.StatusNotFound)
-			return
-		}
-
-		patchtarget := doc.(document.Document)
-		var patches []patcher.Patch
-
-		// Read body of requests
-		body, err := io.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			slog.Error("Patch document: error reading the patch request body", "error", err)
-			http.Error(w, `"invalid request body"`, http.StatusBadRequest)
-			return
-		}
-
-		// Unmarshal the body into an array of patches.
-		json.Unmarshal(body, &patches)
-		if err != nil {
-			slog.Error("Patch document: error unmarshaling patch document request", "error", err)
-			http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)
-			return
-		}
-
-		// Apply the patches to the document
-		patchreply := patchtarget.ApplyPatches(patches)
-		patchreply.Uri = r.URL.Path
-
-		// Marshal it into a json reply
-		jsonResponse, err := json.Marshal(patchreply)
-		if err != nil {
-			// This should never happen
-			slog.Error("Patch: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-			return
-		}
-
-		slog.Info("Patched a document", "path", r.URL.Path)
-		w.Header().Set("Location", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonResponse)
+		database.(collection.Collection).DocumentPatch(w, r, docpath)
 	}
 }
 
