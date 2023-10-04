@@ -20,7 +20,7 @@ type test struct {
 	code     int
 }
 
-func TestServeHTTP(t *testing.T) {
+func TestServeHTTPSequential(t *testing.T) {
 	// Compile the schema
 	testschema, _ := jsonschema.Compile("testschema.json")
 	testhandler := New(false, testschema)

@@ -22,3 +22,16 @@ func TestPercentDecoder(t *testing.T) {
 		}
 	}
 }
+
+func TestGetRelativePath(t *testing.T) {
+	path1 := "/v1/db/document1/col1"
+	path2 := "/v1/db2/doc"
+
+	if GetRelativePath(path1) != "document1/col1" {
+		t.Errorf("Expected document1/col1, but got %s", GetRelativePath(path1))
+	}
+
+	if GetRelativePath(path2) != "doc" {
+		t.Errorf("Expected doc, but got %s", GetRelativePath(path2))
+	}
+}

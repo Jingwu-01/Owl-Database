@@ -1,4 +1,4 @@
-// Currently useless as far as we can tell.
+// Package that helps with string processing.
 package decoder
 
 import (
@@ -48,4 +48,11 @@ func PercentDecoding(input string) (string, error) {
 		}
 		return retval, nil
 	}
+}
+
+// Takes a path with a /v1/db/<path> and removes
+// the /v1/db/.
+func GetRelativePath(path string) string {
+	splitpath := strings.SplitAfterN(path, "/", 4)
+	return splitpath[3]
 }

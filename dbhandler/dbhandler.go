@@ -7,6 +7,7 @@ package dbhandler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,7 +15,9 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -57,8 +60,8 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.Put(w, r)
 	case http.MethodPost:
 		d.Post(w, r)
-	//case http.MethodPatch:
-	// Patch handling
+	case http.MethodPatch:
+		d.Patch(w, r)
 	case http.MethodDelete:
 		d.Delete(w, r)
 	case http.MethodOptions:
@@ -71,7 +74,8 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles case where we recieve a GET request.
+// Handles GET request by either returning a
+// document body or set of all documents in a collection.
 func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
@@ -144,7 +148,9 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles case where we have PUT request.
+// Handles case where we have PUT request by either
+// putting a new document or database at the desired
+// location.
 func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
@@ -186,7 +192,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Puts a new top level database into our handler
+// Puts a new top level database into our handler.
 func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Add a new database to dbhandler if it is not already there; otherwise, return error. (I assumed database and collection use the same struct).
 	_, loaded := d.databases.LoadOrStore(dbpath, collection.New())
@@ -203,14 +209,16 @@ func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string)
 			return
 		}
 		slog.Info("Created Database", "path", dbpath)
-		w.Header().Set("Location", r.URL.Path)
+		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
 		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonResponse)
 		return
 	}
 }
 
-// Handles case where we have DELETE request.
+// Handles a DELETE request either by logging out the user
+// if they use the /auth path, and otherwise by deleting
+// the desired database or document.
 func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/auth" {
 		// logout
@@ -236,6 +244,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 		// Check to see if database exists
 		database, ok := d.databases.Load(dbpath)
+
 		// If the database does not exist, return StatusNotFound error
 		if !ok {
 			slog.Info("User attempted to access non-extant database", "db", dbpath)
@@ -248,7 +257,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			// DELETE database case
 			d.databases.Delete(dbpath)
 			slog.Info("Deleted Database", "path", dbpath)
-			w.Header().Set("Location", r.URL.Path)
+			w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
 			w.WriteHeader(http.StatusNoContent)
 			return
 
@@ -262,7 +271,9 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles case where we have POST request.
+// Handles a POST request either by logging in the user or
+// by adding a document to the desired top level db with a
+// random name.
 func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/auth" {
 		// login
@@ -272,7 +283,101 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles case where we have OPTIONS request.
+// Handles a PATCH request by finding the proper document
+// and applying the desired patches.
+func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
+	// Set headers of response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	path, found := strings.CutPrefix(r.URL.Path, "/v1/")
+
+	// Check for version
+	if !found {
+		slog.Info("User path did not include version", "path", path)
+		msg := fmt.Sprintf("path missing version: %s", path)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	splitpath := strings.SplitAfterN(path, "/", 2)
+
+	dbpath := splitpath[0]
+
+	// Check to see if database exists
+	database, ok := d.databases.Load(dbpath)
+
+	// If the database does not exist, return StatusNotFound error
+	if !ok {
+		slog.Info("User attempted to access non-extant database", "db", dbpath)
+		msg := fmt.Sprintf("Database does not exist")
+		http.Error(w, msg, http.StatusNotFound)
+		return
+	}
+
+	if len(splitpath) == 1 {
+		// Case where we do not point to a document
+		slog.Info("User attempted to patch database", "db", dbpath)
+		msg := fmt.Sprintf("Invalid patch target, %s", r.URL.Path)
+		http.Error(w, msg, http.StatusNotFound)
+		return
+	} else {
+		// Patch document case
+		// Decode the document name
+		docpath, _ := strings.CutSuffix(splitpath[1], "/")
+
+		doc, ok := database.(collection.Collection).Documents.Load(docpath)
+
+		// If document does not exist return error
+		if !ok {
+			slog.Info("User attempted to patch non-extant document", "doc", docpath)
+			msg := fmt.Sprintf("Document, %s, does not exist", docpath)
+			http.Error(w, msg, http.StatusNotFound)
+			return
+		}
+
+		patchtarget := doc.(document.Document)
+		var patches []patcher.Patch
+
+		// Read body of requests
+		body, err := io.ReadAll(r.Body)
+		defer r.Body.Close()
+		if err != nil {
+			slog.Error("Patch document: error reading the patch request body", "error", err)
+			http.Error(w, `"invalid request body"`, http.StatusBadRequest)
+			return
+		}
+
+		// Unmarshal the body into an array of patches.
+		json.Unmarshal(body, &patches)
+		if err != nil {
+			slog.Error("Patch document: error unmarshaling patch document request", "error", err)
+			http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)
+			return
+		}
+
+		// Apply the patches to the document
+		patchreply := patchtarget.ApplyPatches(patches)
+		patchreply.Uri = r.URL.Path
+
+		// Marshal it into a json reply
+		jsonResponse, err := json.Marshal(patchreply)
+		if err != nil {
+			// This should never happen
+			slog.Error("Patch: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+
+		slog.Info("Patched a document", "path", r.URL.Path)
+		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonResponse)
+	}
+}
+
+// Handles OPTIONS request by sending the list of acceptable
+// methods and headers to the client.
 func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Allow", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
