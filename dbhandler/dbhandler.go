@@ -15,7 +15,6 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -209,7 +208,7 @@ func (d *Dbhandler) putDB(w http.ResponseWriter, r *http.Request, dbpath string)
 			return
 		}
 		slog.Info("Created Database", "path", dbpath)
-		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+		w.Header().Set("Location", r.URL.Path)
 		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonResponse)
 		return
@@ -257,7 +256,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			// DELETE database case
 			d.databases.Delete(dbpath)
 			slog.Info("Deleted Database", "path", dbpath)
-			w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+			w.Header().Set("Location", r.URL.Path)
 			w.WriteHeader(http.StatusNoContent)
 			return
 
@@ -303,6 +302,7 @@ func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
 	splitpath := strings.SplitAfterN(path, "/", 2)
 
 	dbpath := splitpath[0]
+	dbpath, _ = strings.CutSuffix(splitpath[0], "/")
 
 	// Check to see if database exists
 	database, ok := d.databases.Load(dbpath)
@@ -370,7 +370,7 @@ func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		slog.Info("Patched a document", "path", r.URL.Path)
-		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+		w.Header().Set("Location", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
 	}

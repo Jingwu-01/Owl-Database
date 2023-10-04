@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/decoder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -98,7 +97,7 @@ func (c Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path str
 		c.Documents.Store(path, modifiedDoc)
 
 		slog.Info("Overwrote an old document", "path", path)
-		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+		w.Header().Set("Location", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonResponse)
 	} else {
@@ -114,7 +113,7 @@ func (c Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path str
 
 		c.Documents.Store(path, doc)
 		slog.Info("Created new document", "path", path)
-		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+		w.Header().Set("Location", r.URL.Path)
 		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonResponse)
 	}
@@ -129,7 +128,7 @@ func (c Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpa
 		// Document found
 		c.Documents.Delete(docpath)
 		slog.Info("Deleted Document", "path", r.URL.Path)
-		w.Header().Set("Location", decoder.GetRelativePath(r.URL.Path))
+		w.Header().Set("Location", r.URL.Path)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	} else {
