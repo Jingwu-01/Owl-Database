@@ -36,7 +36,7 @@ type Docoutput struct {
 	Meta meta        `json:"meta"`
 }
 
-func newOutput(path, user string, docBody map[string]interface{}) Docoutput {
+func newOutput(path, user string, docBody interface{}) Docoutput {
 	return Docoutput{path, docBody, newMeta(user)}
 }
 
@@ -47,7 +47,7 @@ type Document struct {
 }
 
 // Creates a new document.
-func New(path, user string, docBody map[string]interface{}) Document {
+func New(path, user string, docBody interface{}) Document {
 	return Document{newOutput(path, user, docBody), &sync.Map{}}
 }
 

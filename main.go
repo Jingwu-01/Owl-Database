@@ -31,8 +31,8 @@ The flags are:
 		An integer, logger output level, 1 for errors only, -1 for debug
 		as well as all other info.
 	-i
-		A bool flag - include to have a default set of databases added to
-		the server.
+		A bool flag - include to have a test set of databases and documents
+		added to the server.
 
 When a client connects to the OwlDB server, they will be given a unique
 token which they will use on all future logins. They will have the power

@@ -42,6 +42,14 @@ func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
 		// The current test cases will have
 		retval.databases.Store("db1", collection.New())
 		retval.databases.Store("db2", collection.New())
+
+		db1, _ := retval.databases.Load("db1")
+		var collection = db1.(collection.Collection)
+		docbody := make(map[string]interface{})
+		docbody["test"] = 1
+		docbody["jerry"] = "jingwu"
+		doc := document.New("/doc", "charlie", docbody)
+		collection.Documents.Store("doc", doc)
 	}
 
 	return retval

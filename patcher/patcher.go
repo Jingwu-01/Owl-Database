@@ -6,6 +6,7 @@ package patcher
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -41,13 +42,14 @@ func ApplyPatch(doc interface{}, patch Patch) (interface{}, error) {
 
 // Handles visiting a JSON object with this patch struct.
 func (p *patchVisitor) Map(m map[string]any) (any, error) {
+	slog.Debug("Patcher called map", "map", m)
 	retval := make(map[string]any)
 
 	// Process the string
 	splitpath := strings.SplitAfterN(p.currPath, "/", 2)
 
 	// Top level key
-	targetKey := splitpath[0]
+	targetKey := strings.TrimSuffix(splitpath[0], "/")
 
 	// Store rest of path in the patch object, empty tells us we're in target location.
 	if len(splitpath) == 1 && p.patch.Op == "ObjectAdd" {
@@ -60,6 +62,7 @@ func (p *patchVisitor) Map(m map[string]any) (any, error) {
 		}
 		// If target key not in the map, add it to object.
 		retval[targetKey] = p.patch.Value
+		slog.Debug("Patcher returning map", "retval", retval)
 		return retval, nil
 	} else if len(splitpath) != 1 {
 		// Update curr path for other cases
@@ -78,17 +81,20 @@ func (p *patchVisitor) Map(m map[string]any) (any, error) {
 				return updated, err
 			}
 
+			slog.Debug("Setting updated val", "key", key, "val", updated)
 			retval[key] = updated
 			found = true
+		} else {
+			retval[key] = val
 		}
-		retval[key] = val
 	}
 
 	if !found {
 		// If we get here, patch has invalid path.
 		msg := fmt.Sprintf("Missing key \"%s\" in path", targetKey)
-		return false, errors.New(msg)
+		return retval, errors.New(msg)
 	} else {
+		slog.Debug("Patcher returning map", "retval", retval)
 		return retval, nil
 	}
 
@@ -96,6 +102,7 @@ func (p *patchVisitor) Map(m map[string]any) (any, error) {
 
 // Handles visiting a slice with this patch.
 func (p *patchVisitor) Slice(s []any) (any, error) {
+	slog.Debug("Patcher called Slice", "slice", s)
 	if p.patch.Op == "ArrayAdd" && p.currPath == "" {
 		// Not sure if this is what we want to do.
 		arr := append(s, p.patch.Value)
@@ -119,24 +126,23 @@ func (p *patchVisitor) Slice(s []any) (any, error) {
 		splitpath := strings.SplitAfterN(p.currPath, "/", 2)
 
 		// Top level key
-		targetKey := splitpath[0]
+		targetKey := strings.TrimSuffix(splitpath[0], "/")
 
 		// Convert to an index
 		targetIDX, err := strconv.Atoi(targetKey)
 
+		// Error cases
 		if err != nil {
 			return retval, errors.New("Attempted to index an array with a non-integer")
 		}
 		if targetIDX > len(s) {
 			return retval, errors.New("Array out of bounds errors")
 		}
-
-		if len(splitpath) != 1 {
-			// Update curr path for other cases
-			p.currPath = splitpath[1]
-		} else {
-			p.currPath = ""
+		if len(splitpath) == 1 {
+			return retval, errors.New("Path ends with slice index")
 		}
+
+		p.currPath = splitpath[1]
 
 		// Iterate over the slice and update target value
 		for i, val := range s {
