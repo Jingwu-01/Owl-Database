@@ -184,8 +184,8 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusNotFound)
 			return
 		}
-
-		database.(collection.Collection).DocumentPut(w, r, splitpath[1], d.schema)
+		var collection = database.(collection.Collection)
+		collection.DocumentPut(w, r, splitpath[1], d.schema)
 	}
 }
 
@@ -263,7 +263,8 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 			// Decode the document name
 			docpath, _ := strings.CutSuffix(splitpath[1], "/")
 
-			database.(collection.Collection).DocumentDelete(w, r, docpath)
+			var collection = database.(collection.Collection)
+			collection.DocumentDelete(w, r, docpath)
 		}
 	}
 }
@@ -322,7 +323,9 @@ func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Decode the document name
 		docpath, _ := strings.CutSuffix(splitpath[1], "/")
-		database.(collection.Collection).DocumentPatch(w, r, docpath)
+
+		var collection = database.(collection.Collection)
+		collection.DocumentPatch(w, r, docpath)
 	}
 }
 

@@ -55,7 +55,7 @@ func (c Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Puts a document into a collection
-func (c Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema) {
+func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema) {
 
 	// Read body of requests
 	desc, err := io.ReadAll(r.Body)
@@ -123,7 +123,7 @@ func (c Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path str
 }
 
 // Deletes a document from this collection
-func (c Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
+func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Access the document
 	_, exist := c.Documents.Load(docpath)
 	if exist {
@@ -141,7 +141,7 @@ func (c Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpa
 	}
 }
 
-func (c Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string) {
+func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Patch document case
 
 	doc, ok := c.Documents.Load(docpath)
