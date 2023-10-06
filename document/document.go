@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
@@ -43,12 +42,13 @@ func newOutput(path, user string, docBody interface{}) Docoutput {
 // A document is a document plus a concurrent skip list of collections
 type Document struct {
 	Output   Docoutput
-	Children *sync.Map
+	Children *CollectionHolder
 }
 
 // Creates a new document.
 func New(path, user string, docBody interface{}) Document {
-	return Document{newOutput(path, user, docBody), &sync.Map{}}
+	newH := NewHolder()
+	return Document{newOutput(path, user, docBody), &newH}
 }
 
 // Overwrite the body of a document upon recieving a put.

@@ -34,6 +34,13 @@ type Pair[K cmp.Ordered, V any] struct {
 	Value V
 }
 
+// Striing min and max values
+const (
+	STRING_MIN    = ""
+	STRING_MAX    = string('a' + 999999999) // Temporary hack
+	DEFAULT_LEVEL = 5
+)
+
 // For Upsert
 type UpdateCheck[K cmp.Ordered, V any] func(key K, currValue V, exists bool) (newValue V, err error)
 
@@ -143,6 +150,8 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 	return found.value, found.fullyLinked.Load() && !found.marked.Load()
 }
 
+// NOTE: (TODO?) changed return behavior of updated s.t. it is true
+// only if it updates a value, not whether on success
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
 	slog.Debug("Called Upsert", "key", key) // Call trace
 
@@ -251,7 +260,7 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 		}
 
 		s.totalOps.Add(1)
-		return true, nil
+		return false, nil
 	}
 }
 
