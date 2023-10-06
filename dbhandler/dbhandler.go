@@ -15,6 +15,7 @@ import (
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -82,6 +83,12 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Handles GET request by either returning a
 // document body or set of all documents in a collection.
 func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
+	// Check if we are in the subscribe mode
+	mode := r.URL.Query().Get("mode")
+	if mode == "subscribe" {
+		subscribe.New().ServeHTTP(w, r)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
