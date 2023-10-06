@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 // A meta stores metadata about a document.
@@ -89,7 +90,7 @@ type PatchResponse struct {
 // Applys a slice of patches to this document.
 // Returns a PatchResponse without the Uri field
 // set, expecting it to be set by caller.
-func (d Document) ApplyPatches(patches []patcher.Patch) (PatchResponse, interface{}) {
+func (d Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (PatchResponse, interface{}) {
 	slog.Info("Applying patch to document", "path", d.Output.Path)
 	var ret PatchResponse
 	var err error
@@ -105,6 +106,15 @@ func (d Document) ApplyPatches(patches []patcher.Patch) (PatchResponse, interfac
 			ret.PatchFailed = true
 			return ret, nil
 		}
+	}
+
+	err = schema.Validate(newdoc)
+	if err != nil {
+		slog.Error("Patch document: patched document did not conform to schema", "error", err)
+		str := fmt.Sprintf("Patched document did not conform to schema: %s", err.Error())
+		ret.Message = str
+		ret.PatchFailed = true
+		return ret, nil
 	}
 
 	// Successfully applied all the patches.
