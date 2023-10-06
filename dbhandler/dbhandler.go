@@ -247,9 +247,9 @@ func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
 	coll, _, resc := d.getResourceFromPath(newRequest)
 	switch resc {
 	case RESOURCE_DB:
-		coll.DocumentPatch(w, r, newName)
+		coll.DocumentPatch(w, r, newName, d.schema)
 	case RESOURCE_COLL:
-		coll.DocumentPatch(w, r, newName)
+		coll.DocumentPatch(w, r, newName, d.schema)
 	case RESOURCE_DOC:
 		d.handlePathError(w, r, INVALID_OPERATION)
 	default:

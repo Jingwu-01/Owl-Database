@@ -183,7 +183,7 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string) {
+func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema) {
 	// Patch document case
 	// Retrieve document
 	// TODO: maybe update this to use upsert?
@@ -217,7 +217,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	}
 
 	// Apply the patches to the document
-	patchreply, newdoc := doc.ApplyPatches(patches)
+	patchreply, newdoc := doc.ApplyPatches(patches, schema)
 	patchreply.Uri = r.URL.Path
 
 	if !patchreply.PatchFailed {
