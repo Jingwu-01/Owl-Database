@@ -4,17 +4,48 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
 )
 
-type SessionInfo struct {
-	Username  string
-	ExpiresAt time.Time
+// An authenticator implements methods to allow for users
+// to log in and out of the owlDB and to verify users
+// are allowed to use this db.
+type Authenticator struct {
+	sessions *sync.Map
+}
+
+// Creates a new authenticator object
+func New() Authenticator {
+	return Authenticator{&sync.Map{}}
+}
+
+func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		a.Login(w, r)
+	case http.MethodDelete:
+		a.Logout(w, r)
+	case http.MethodOptions:
+		options.Options(w, r)
+	default:
+		// If user used method we do not support.
+		slog.Info("User used unsupported method", "method", r.Method)
+		msg := fmt.Sprintf("unsupported method: %s", r.Method)
+		http.Error(w, msg, http.StatusBadRequest)
+	}
+}
+
+type sessionInfo struct {
+	username  string
+	expiresAt time.Time
 }
 
 // generateToken generates a cryptographically secure and random string token
@@ -30,8 +61,9 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(token), nil
 }
 
-// validateToken tells if a token in a request is valid
-func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) bool {
+// ValidateToken tells if a token in a request is valid. Returns
+// true if so, else writes an error to the input response writer.
+func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bool {
 	// Check if the token is missing
 	authValue := r.Header.Get("Authorization")
 	parts := strings.Split(authValue, " ")
@@ -51,9 +83,9 @@ func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) b
 	}
 
 	// Validate token and expiration in sessions map
-	userInfo, ok := sessions.Load(token)
+	userInfo, ok := a.sessions.Load(token)
 	if ok {
-		if !userInfo.(SessionInfo).ExpiresAt.After(time.Now()) {
+		if !userInfo.(sessionInfo).expiresAt.After(time.Now()) {
 			// token has expired
 			slog.Info("validateToken: token has expired")
 			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
@@ -70,8 +102,8 @@ func validateToken(sessions *sync.Map, w http.ResponseWriter, r *http.Request) b
 	}
 }
 
-// Login request
-func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
+// Handles login request.
+func (a *Authenticator) Login(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -92,7 +124,6 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// I think we should get the username with the JSON visitor model.
 	// Store username and token in a session map with expiration time
 	username := userInfo["username"]
 	if username == "" {
@@ -109,7 +140,7 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessions.Store(token, SessionInfo{Username: username, ExpiresAt: time.Now().Add(1 * time.Hour)})
+	a.sessions.Store(token, sessionInfo{username, time.Now().Add(1 * time.Hour)})
 
 	// Return the token to the user
 	jsonToken, err := json.Marshal(map[string]string{"token": token})
@@ -122,16 +153,16 @@ func Login(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonToken)
-	slog.Info("Login: success")
+	slog.Info("Login: success", "user", username)
 }
 
-// Logout request
-func Logout(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
+// Handles logout request.
+func (a *Authenticator) Logout(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	isValidToken := validateToken(sessions, w, r)
+	isValidToken := a.ValidateToken(w, r)
 	if isValidToken {
 		// Remove the corresponding userInfo from the sessions map
 		authValue := r.Header.Get("Authorization")
@@ -145,10 +176,10 @@ func Logout(sessions *sync.Map, w http.ResponseWriter, r *http.Request) {
 		}
 		token := parts[1]
 
-		sessions.Delete(token)
+		a.sessions.Delete(token)
 		w.WriteHeader(http.StatusNoContent)
 
-		slog.Info("Logout: user is successfully removed")
+		slog.Info("Logout: user is successfully removed", "token", token)
 		return
 	}
 }

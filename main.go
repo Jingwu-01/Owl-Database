@@ -49,6 +49,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/dbhandler"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/initialize"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -63,7 +64,8 @@ func main() {
 	var testMode bool
 	var err error
 	var server http.Server
-	var handler dbhandler.Dbhandler
+	var owlDB dbhandler.Dbhandler
+	var authenticator authentication.Authenticator
 
 	// Initialize the user input variables.
 	port, schema, tknPath, testMode, err = initialize.Initialize()
@@ -73,9 +75,15 @@ func main() {
 		return
 	}
 
-	handler = dbhandler.New(testMode, schema)
+	authenticator = authentication.New()
+	owlDB = dbhandler.New(testMode, schema, &authenticator)
+
+	mux := http.NewServeMux()
+	mux.Handle("/v1/", &owlDB)
+	mux.Handle("/auth", &authenticator)
+
 	server.Addr = fmt.Sprintf("localhost:%d", port)
-	server.Handler = &handler
+	server.Handler = mux
 
 	// Remove errors of not used
 	slog.Info("Input token path", "tokenpath", tknPath)

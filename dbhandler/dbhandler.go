@@ -9,10 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -38,19 +37,25 @@ type putoutput struct {
 	Uri string `json:"uri"`
 }
 
+// An authenticator is something which can validate a login token as one supported
+// by a dbhandler or not.
+type Authenticator interface {
+	ValidateToken(w http.ResponseWriter, r *http.Request) bool
+}
+
 // A dbhandler is the highest level struct, holds all the
 // base level databases as well as the schema and map of
 // usernames to authentication tokens.
 type Dbhandler struct {
-	databases *document.CollectionHolder
-	schema    *jsonschema.Schema
-	sessions  *sync.Map
+	databases     *document.CollectionHolder
+	schema        *jsonschema.Schema
+	authenticator Authenticator
 }
 
 // Creates a new DBHandler
-func New(testmode bool, schema *jsonschema.Schema) Dbhandler {
+func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
 	newHolder := document.NewHolder()
-	retval := Dbhandler{&newHolder, schema, &sync.Map{}}
+	retval := Dbhandler{&newHolder, schema, authenticator}
 
 	if testmode {
 		slog.Info("Test mode enabled")
@@ -88,7 +93,7 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		d.Delete(w, r)
 	case http.MethodOptions:
-		d.Options(w, r)
+		options.Options(w, r)
 	default:
 		// If user used method we do not support.
 		slog.Info("User used unsupported method", "method", r.Method)
@@ -163,12 +168,6 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 // if they use the /auth path, and otherwise by deleting
 // the desired database or document.
 func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/auth" {
-		// logout
-		authentication.Logout(d.sessions, w, r)
-		return
-	}
-
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -204,12 +203,6 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 // by adding a document to the desired top level db with a
 // random name.
 func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/auth" {
-		// login
-		authentication.Login(d.sessions, w, r)
-		return
-	}
-
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -255,16 +248,6 @@ func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
 	default:
 		d.handlePathError(w, r, resc)
 	}
-}
-
-// Handles OPTIONS request by sending the list of acceptable
-// methods and headers to the client.
-func (d *Dbhandler) Options(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Allow", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,DELETE,OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "accept,Content-Type,Authorization")
-	w.WriteHeader(http.StatusOK)
 }
 
 // Handles top level database gets
