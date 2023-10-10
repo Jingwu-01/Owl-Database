@@ -27,15 +27,26 @@ type patchVisitor struct {
 }
 
 // Creates a new patch visitor struct for this patch.
-func new(patch Patch) patchVisitor {
+func new(patch Patch) (patchVisitor, error) {
 	vis := patchVisitor{}
 	vis.patch = patch
-	vis.currPath = strings.TrimPrefix(patch.Path, "/")
-	return vis
+	currPath, found := strings.CutPrefix(patch.Path, "/")
+
+	if !found {
+		slog.Info("User attempted patch without leading slash", "path", patch.Path)
+		return vis, errors.New("Patch path missing leading slash")
+	}
+
+	vis.currPath = currPath
+
+	return vis, nil
 }
 
 func ApplyPatch(doc interface{}, patch Patch) (interface{}, error) {
-	patcher := new(patch)
+	patcher, err := new(patch)
+	if err != nil {
+		return nil, err
+	}
 	patchedDoc, err := jsonvisit.Accept(doc, &patcher)
 	return patchedDoc, err
 }
@@ -112,13 +123,13 @@ func (p *patchVisitor) Slice(s []any) (any, error) {
 		for i, val := range s {
 			// Not sure if this is what we want to do.
 			if jsonvisit.Equal(val, p.patch.Value) {
-				arr := append(s[:i], s[i+1:])
+				arr := append(s[:i], s[i+1:]...)
 				return arr, nil
 			}
 		}
 		return s, nil
 	} else if p.currPath == "" {
-		return nil, errors.New("Attempted method which was not ArrayAdd or ArrayRemove")
+		return nil, errors.New("attempted method which was not ArrayAdd or ArrayRemove")
 	} else {
 		retval := make([]any, 0)
 
@@ -133,13 +144,13 @@ func (p *patchVisitor) Slice(s []any) (any, error) {
 
 		// Error cases
 		if err != nil {
-			return retval, errors.New("Attempted to index an array with a non-integer")
+			return retval, errors.New("attempted to index an array with a non-integer")
 		}
 		if targetIDX > len(s) {
-			return retval, errors.New("Array out of bounds errors")
+			return retval, errors.New("array out of bounds errors")
 		}
 		if len(splitpath) == 1 {
-			return retval, errors.New("Path ends with slice index")
+			return retval, errors.New("path ends with slice index")
 		}
 
 		p.currPath = splitpath[1]
@@ -165,20 +176,20 @@ func (p *patchVisitor) Slice(s []any) (any, error) {
 
 // Handles visiting a bool with this patch.
 func (p *patchVisitor) Bool(b bool) (any, error) {
-	return nil, errors.New("Path includes a boolean")
+	return nil, errors.New("path includes a boolean")
 }
 
 // Handles visiting a float with this patch.
 func (p *patchVisitor) Float64(f float64) (any, error) {
-	return nil, errors.New("Path includes a Float64")
+	return nil, errors.New("path includes a Float64")
 }
 
 // Handles visiting a string with this patch.
 func (p *patchVisitor) String(string) (any, error) {
-	return nil, errors.New("Path includes a String")
+	return nil, errors.New("path includes a String")
 }
 
 // Handles visiting a null object with this patch.
 func (p *patchVisitor) Null() (any, error) {
-	return nil, errors.New("Path includes a Null")
+	return nil, errors.New("path includes a Null")
 }
