@@ -2,6 +2,7 @@
 package initialize
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"log/slog"
@@ -14,7 +15,7 @@ import (
 // the input schema file into a jsonschema.Schema object.
 // Returns the port number, schema object, and the token
 // file's path.
-func Initialize() (int, *jsonschema.Schema, string, bool, error) {
+func Initialize() (int, *jsonschema.Schema, map[string]string, bool, error) {
 	// Initialize flags
 	portFlag := flag.Int("p", 3318, "Port number")
 	schemaFlag := flag.String("s", "", "Schema file name")
@@ -23,10 +24,12 @@ func Initialize() (int, *jsonschema.Schema, string, bool, error) {
 	testFlag := flag.Bool("i", false, "true to initialize a default database for testing")
 	flag.Parse()
 
+	var tokenmap map[string]string
+
 	// Ensure we got a schema file
 	if *schemaFlag == "" {
-		slog.Error("Missing schema", "error", errors.New("Missing schema"))
-		return 0, nil, "", false, errors.New("Missing Schema")
+		slog.Error("Missing schema", "error", errors.New("missing schema"))
+		return 0, nil, tokenmap, false, errors.New("missing schema")
 	}
 
 	// Compile the schema
@@ -35,7 +38,24 @@ func Initialize() (int, *jsonschema.Schema, string, bool, error) {
 	// Check for errors.
 	if err != nil {
 		slog.Error("Invalid schema", "error", err)
-		return 0, nil, "", false, errors.New("Invalid schema")
+		return 0, nil, tokenmap, false, errors.New("invalid schema")
+	}
+
+	// If the user inputs a token file.
+	if *tokenFlag != "" {
+		// Read in token file.
+		tokens, err := os.ReadFile(*tokenFlag)
+		if err != nil {
+			slog.Error("Error reading token file", "error", err)
+			return 0, nil, tokenmap, false, errors.New("token file error")
+		}
+
+		// Unmarshal it.
+		err = json.Unmarshal(tokens, &tokenmap)
+		if err != nil {
+			slog.Error("Error marshalling token file", "error", err)
+			return 0, nil, tokenmap, false, errors.New("marshalling tokens error")
+		}
 	}
 
 	// Set to debug and above
@@ -50,5 +70,5 @@ func Initialize() (int, *jsonschema.Schema, string, bool, error) {
 		slog.SetDefault(slog.New(h))
 	}
 
-	return *portFlag, schema, *tokenFlag, *testFlag, nil
+	return *portFlag, schema, tokenmap, *testFlag, nil
 }

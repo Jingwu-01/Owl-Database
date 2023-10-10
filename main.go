@@ -60,7 +60,7 @@ func main() {
 	// Declare variables for main method.
 	var port int
 	var schema *jsonschema.Schema
-	var tknPath string
+	var tokenmap map[string]string
 	var testMode bool
 	var err error
 	var server http.Server
@@ -68,7 +68,7 @@ func main() {
 	var authenticator authentication.Authenticator
 
 	// Initialize the user input variables.
-	port, schema, tknPath, testMode, err = initialize.Initialize()
+	port, schema, tokenmap, testMode, err = initialize.Initialize()
 
 	// Printing was handled in initialize.
 	if err != nil {
@@ -86,7 +86,7 @@ func main() {
 	server.Handler = mux
 
 	// Remove errors of not used
-	slog.Info("Input token path", "tokenpath", tknPath)
+	slog.Info("Input token path", "tokenpath", tokenmap)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
