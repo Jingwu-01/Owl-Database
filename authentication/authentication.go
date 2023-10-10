@@ -30,9 +30,9 @@ func New() Authenticator {
 func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		a.Login(w, r)
+		a.login(w, r)
 	case http.MethodDelete:
-		a.Logout(w, r)
+		a.logout(w, r)
 	case http.MethodOptions:
 		options.Options(w, r)
 	default:
@@ -67,17 +67,18 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bo
 	// Check if the token is missing
 	authValue := r.Header.Get("Authorization")
 	parts := strings.Split(authValue, " ")
+	slog.Info("Validate request", "full string", authValue)
 
 	if len(parts) != 2 || parts[0] != "Bearer" {
 		// Missing or malformed bearer token
-		slog.Info("validateToken: missing or malformed bearer token", "token", authValue)
+		slog.Info("ValidateToken: missing or malformed bearer token", "token", authValue)
 		http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
 		return false
 	}
 	token := parts[1]
 
 	if token == "" {
-		slog.Info("validateToken: token is missing", "token", token)
+		slog.Info("ValidateToken: token is missing", "token", token)
 		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
 		return false
 	}
@@ -87,7 +88,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bo
 	if ok {
 		if !userInfo.(sessionInfo).expiresAt.After(time.Now()) {
 			// token has expired
-			slog.Info("validateToken: token has expired")
+			slog.Info("ValidateToken: token has expired")
 			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
 			return false
 		} else {
@@ -96,14 +97,14 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bo
 		}
 	} else {
 		// token does not exist
-		slog.Info("validateToken: token does not exist")
+		slog.Info("ValidateToken: token does not exist")
 		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
 		return false
 	}
 }
 
 // Handles login request.
-func (a *Authenticator) Login(w http.ResponseWriter, r *http.Request) {
+func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -157,7 +158,7 @@ func (a *Authenticator) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles logout request.
-func (a *Authenticator) Logout(w http.ResponseWriter, r *http.Request) {
+func (a *Authenticator) logout(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")

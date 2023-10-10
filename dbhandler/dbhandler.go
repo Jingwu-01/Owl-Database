@@ -81,30 +81,33 @@ func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) 
 // The server implements the "handler" interface, it will recieve
 // requests from the user and delegate them to the proper methods.
 func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		d.Get(w, r)
-	case http.MethodPut:
-		d.Put(w, r)
-	case http.MethodPost:
-		d.Post(w, r)
-	case http.MethodPatch:
-		d.Patch(w, r)
-	case http.MethodDelete:
-		d.Delete(w, r)
-	case http.MethodOptions:
+	// Check if user is valid.
+	if r.Method == http.MethodOptions {
 		options.Options(w, r)
-	default:
-		// If user used method we do not support.
-		slog.Info("User used unsupported method", "method", r.Method)
-		msg := fmt.Sprintf("unsupported method: %s", r.Method)
-		http.Error(w, msg, http.StatusBadRequest)
+	} else if d.authenticator.ValidateToken(w, r) {
+		switch r.Method {
+		case http.MethodGet:
+			d.get(w, r)
+		case http.MethodPut:
+			d.put(w, r)
+		case http.MethodPost:
+			d.post(w, r)
+		case http.MethodPatch:
+			d.patch(w, r)
+		case http.MethodDelete:
+			d.delete(w, r)
+		default:
+			// If user used method we do not support.
+			slog.Info("User used unsupported method", "method", r.Method)
+			msg := fmt.Sprintf("unsupported method: %s", r.Method)
+			http.Error(w, msg, http.StatusBadRequest)
+		}
 	}
 }
 
 // Handles GET request by either returning a
 // document body or set of all documents in a collection.
-func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 	// Check if we are in the subscribe mode
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
@@ -132,7 +135,7 @@ func (d *Dbhandler) Get(w http.ResponseWriter, r *http.Request) {
 // Handles case where we have PUT request by either
 // putting a new document or database at the desired
 // location.
-func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -167,7 +170,7 @@ func (d *Dbhandler) Put(w http.ResponseWriter, r *http.Request) {
 // Handles a DELETE request either by logging out the user
 // if they use the /auth path, and otherwise by deleting
 // the desired database or document.
-func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -202,7 +205,7 @@ func (d *Dbhandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Handles a POST request either by logging in the user or
 // by adding a document to the desired top level db with a
 // random name.
-func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -223,7 +226,7 @@ func (d *Dbhandler) Post(w http.ResponseWriter, r *http.Request) {
 
 // Handles a PATCH request by finding the proper document
 // and applying the desired patches.
-func (d *Dbhandler) Patch(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
