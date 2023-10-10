@@ -22,9 +22,26 @@ type Authenticator struct {
 	sessions *sync.Map
 }
 
+// A session info carries an individual users data
+// about their session, including username and when
+// their session expires.
+type sessionInfo struct {
+	username  string
+	expiresAt time.Time
+}
+
 // Creates a new authenticator object
 func New() Authenticator {
 	return Authenticator{&sync.Map{}}
+}
+
+// Installs a map of usernames to login tokens into this
+// authenticator. These user's sessions will last 24 hours.
+func (a *Authenticator) InstallUsers(users map[string]string) {
+	// Iterate over all user/token pairs.
+	for user, token := range users {
+		a.sessions.Store(token, sessionInfo{user, time.Now().Add(24 * time.Hour)})
+	}
 }
 
 func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -41,11 +58,6 @@ func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		msg := fmt.Sprintf("unsupported method: %s", r.Method)
 		http.Error(w, msg, http.StatusBadRequest)
 	}
-}
-
-type sessionInfo struct {
-	username  string
-	expiresAt time.Time
 }
 
 // generateToken generates a cryptographically secure and random string token

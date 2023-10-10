@@ -75,18 +75,20 @@ func main() {
 		return
 	}
 
+	// Create handlers
 	authenticator = authentication.New()
 	owlDB = dbhandler.New(testMode, schema, &authenticator)
 
+	// Install handlers into mux
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", &owlDB)
 	mux.Handle("/auth", &authenticator)
 
+	// Install users into authenticator
+	authenticator.InstallUsers(tokenmap)
+
 	server.Addr = fmt.Sprintf("localhost:%d", port)
 	server.Handler = mux
-
-	// Remove errors of not used
-	slog.Info("Input token path", "tokenpath", tokenmap)
 
 	// The following code should go last and remain unchanged.
 	// Note that you must actually initialize 'server' and 'port'
