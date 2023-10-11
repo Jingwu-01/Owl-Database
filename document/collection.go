@@ -133,6 +133,11 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 
 			// Modify data
 			currValue.Overwrite(docBody)
+
+			// Delete Children of this document
+			newHolder := NewHolder()
+			currValue.Children = &newHolder
+
 			return currValue, nil
 		} else {
 			// Create new document
