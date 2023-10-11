@@ -53,10 +53,10 @@ func New(path, user string, docBody interface{}) Document {
 }
 
 // Overwrite the body of a document upon recieving a put.
-func (d *Document) Overwrite(docBody interface{}) {
+func (d *Document) Overwrite(docBody interface{}, name string) {
 	existingDocOutput := d.Output
 	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
-	existingDocOutput.Meta.LastModifiedBy = "DUMMY USER"
+	existingDocOutput.Meta.LastModifiedBy = name
 
 	// Modify document contents
 	existingDocOutput.Doc = docBody

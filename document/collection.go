@@ -73,7 +73,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Puts a document into a collection
-func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema) {
+func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema, name string) {
 	// Read body of requests
 	desc, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -132,7 +132,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			}
 
 			// Modify data
-			currValue.Overwrite(docBody)
+			currValue.Overwrite(docBody, name)
 
 			// Delete Children of this document
 			newHolder := NewHolder()
@@ -141,7 +141,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			return currValue, nil
 		} else {
 			// Create new document
-			newDoc := New(key, "DUMMY USER", docBody)
+			newDoc := New(key, name, docBody)
 			return &newDoc, nil
 		}
 	}
@@ -188,7 +188,7 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema) {
+func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
 	// Patch document case
 	// Retrieve document
 	// TODO: maybe update this to use upsert?
@@ -227,7 +227,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 
 	if !patchreply.PatchFailed {
 		// Need to modify metadata
-		doc.Overwrite(newdoc)
+		doc.Overwrite(newdoc, name)
 
 		// Upsert to reinsert
 		patchUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
@@ -264,7 +264,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 }
 
 // note: a lot of shared logic with documentput, could refactor for shared method
-func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema *jsonschema.Schema) {
+func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema *jsonschema.Schema, name string) {
 	// Read body of requests
 	desc, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -298,7 +298,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 			return nil, errors.New("exists")
 		} else {
 			// Create new document
-			newDoc := New(key, "DUMMY USER", docBody)
+			newDoc := New(key, name, docBody)
 			return &newDoc, nil
 		}
 	}

@@ -40,7 +40,7 @@ type putoutput struct {
 // An authenticator is something which can validate a login token as one supported
 // by a dbhandler or not.
 type Authenticator interface {
-	ValidateToken(w http.ResponseWriter, r *http.Request) bool
+	ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string)
 }
 
 // A dbhandler is the highest level struct, holds all the
@@ -84,23 +84,26 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if user is valid.
 	if r.Method == http.MethodOptions {
 		options.Options(w, r)
-	} else if d.authenticator.ValidateToken(w, r) {
-		switch r.Method {
-		case http.MethodGet:
-			d.get(w, r)
-		case http.MethodPut:
-			d.put(w, r)
-		case http.MethodPost:
-			d.post(w, r)
-		case http.MethodPatch:
-			d.patch(w, r)
-		case http.MethodDelete:
-			d.delete(w, r)
-		default:
-			// If user used method we do not support.
-			slog.Info("User used unsupported method", "method", r.Method)
-			msg := fmt.Sprintf("unsupported method: %s", r.Method)
-			http.Error(w, msg, http.StatusBadRequest)
+	} else {
+		valid, name := d.authenticator.ValidateToken(w, r)
+		if valid {
+			switch r.Method {
+			case http.MethodGet:
+				d.get(w, r)
+			case http.MethodPut:
+				d.put(w, r, name)
+			case http.MethodPost:
+				d.post(w, r, name)
+			case http.MethodPatch:
+				d.patch(w, r, name)
+			case http.MethodDelete:
+				d.delete(w, r)
+			default:
+				// If user used method we do not support.
+				slog.Info("User used unsupported method", "method", r.Method)
+				msg := fmt.Sprintf("unsupported method: %s", r.Method)
+				http.Error(w, msg, http.StatusBadRequest)
+			}
 		}
 	}
 }
@@ -135,7 +138,7 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 // Handles case where we have PUT request by either
 // putting a new document or database at the desired
 // location.
-func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -158,7 +161,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request) {
 		d.handlePathError(w, r, RESOURCE_INTERNAL)
 	case RESOURCE_COLL:
 		// put a document to a collection
-		coll.DocumentPut(w, r, newName, d.schema)
+		coll.DocumentPut(w, r, newName, d.schema, name)
 	case RESOURCE_DOC:
 		// put a collection to a document
 		doc.Children.CollectionPut(w, r, newName)
@@ -205,7 +208,7 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 // Handles a POST request either by logging in the user or
 // by adding a document to the desired top level db with a
 // random name.
-func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, name string) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -214,9 +217,9 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request) {
 	coll, _, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {
 	case RESOURCE_DB:
-		d.DatabasePost(w, r, coll)
+		d.DatabasePost(w, r, coll, name)
 	case RESOURCE_COLL:
-		coll.DocumentPost(w, r, d.schema)
+		coll.DocumentPost(w, r, d.schema, name)
 	case RESOURCE_DOC:
 		d.handlePathError(w, r, INVALID_OPERATION)
 	default:
@@ -226,7 +229,7 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request) {
 
 // Handles a PATCH request by finding the proper document
 // and applying the desired patches.
-func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request) {
+func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -243,9 +246,9 @@ func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request) {
 	coll, _, resc := d.getResourceFromPath(newRequest)
 	switch resc {
 	case RESOURCE_DB:
-		coll.DocumentPatch(w, r, newName, d.schema)
+		coll.DocumentPatch(w, r, newName, d.schema, name)
 	case RESOURCE_COLL:
-		coll.DocumentPatch(w, r, newName, d.schema)
+		coll.DocumentPatch(w, r, newName, d.schema, name)
 	case RESOURCE_DOC:
 		d.handlePathError(w, r, INVALID_OPERATION)
 	default:
@@ -266,9 +269,9 @@ func (d *Dbhandler) DatabasePut(w http.ResponseWriter, r *http.Request, dbpath s
 }
 
 // Handles top level database posts
-func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll *document.Collection) {
+func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll *document.Collection, name string) {
 	// Same behavior as collection for now
-	coll.DocumentPost(w, r, d.schema)
+	coll.DocumentPost(w, r, d.schema, name)
 }
 
 // Delete a top level database

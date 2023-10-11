@@ -75,7 +75,7 @@ func generateToken() (string, error) {
 
 // ValidateToken tells if a token in a request is valid. Returns
 // true if so, else writes an error to the input response writer.
-func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bool {
+func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string) {
 	// Check if the token is missing
 	authValue := r.Header.Get("Authorization")
 	parts := strings.Split(authValue, " ")
@@ -85,14 +85,14 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bo
 		// Missing or malformed bearer token
 		slog.Info("ValidateToken: missing or malformed bearer token", "token", authValue)
 		http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
-		return false
+		return false, ""
 	}
 	token := parts[1]
 
 	if token == "" {
 		slog.Info("ValidateToken: token is missing", "token", token)
 		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-		return false
+		return false, ""
 	}
 
 	// Validate token and expiration in sessions map
@@ -102,16 +102,16 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) bo
 			// token has expired
 			slog.Info("ValidateToken: token has expired")
 			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-			return false
+			return false, ""
 		} else {
 			// token is valid
-			return true
+			return true, userInfo.(sessionInfo).username
 		}
 	} else {
 		// token does not exist
 		slog.Info("ValidateToken: token does not exist")
 		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-		return false
+		return false, ""
 	}
 }
 
@@ -175,7 +175,7 @@ func (a *Authenticator) logout(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	isValidToken := a.ValidateToken(w, r)
+	isValidToken, _ := a.ValidateToken(w, r)
 	if isValidToken {
 		// Remove the corresponding userInfo from the sessions map
 		authValue := r.Header.Get("Authorization")
