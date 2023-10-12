@@ -140,7 +140,7 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	// Store username and token in a session map with expiration time
 	username := userInfo["username"]
 	if username == "" {
-		slog.Error("Login: no username in request body", "error", err)
+		slog.Info("Login: no username in request body")
 		http.Error(w, "No username in request body", http.StatusBadRequest)
 		return
 	}

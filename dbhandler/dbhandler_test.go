@@ -98,34 +98,4 @@ func TestServeHTTPSequential(t *testing.T) {
 		}
 		i++
 	}
-
-	// // authorization test (Note that login successful and logout successfull need to be tested through Swagger, because the token is randomly generated each time.)
-	// authData := []test{
-	// 	// Login: Bad Request
-	// 	{httptest.NewRequest(http.MethodPost, "/auth", strings.NewReader("{\"username\":\"\"}")),
-	// 		httptest.NewRecorder(),
-	// 		"No username in request body", 400},
-	// 	// Logout: 	Unauthorized
-	// 	{httptest.NewRequest(http.MethodDelete, "/auth", nil),
-	// 		httptest.NewRecorder(),
-	// 		"Missing or invalid bearer token", 401},
-	// }
-
-	// index := 0
-	// for _, d := range authData {
-	// 	testhandler.ServeHTTP(d.w, d.r)
-	// 	res := d.w.Result()
-	// 	defer res.Body.Close()
-	// 	data, err := ioutil.ReadAll(res.Body)
-	// 	if err != nil {
-	// 		t.Errorf("Test %d: Expected no error, got %v", index, err)
-	// 	}
-	// 	if string(data) != d.expected && d.expected != "" {
-	// 		t.Errorf("Test %d: Expected response %s got %s", index, d.expected, string(data))
-	// 	}
-	// 	if res.StatusCode != d.code {
-	// 		t.Errorf("Test %d: Expected error code %d got %d", index, d.code, res.StatusCode)
-	// 	}
-	// 	index++
-	// }
 }
