@@ -175,7 +175,7 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 
 	// DELETE database
 	if resc == RESOURCE_DB_PD {
-		d.DatabasePut(w, r, newName)
+		d.DatabaseDelete(w, r, newName)
 		return
 	} else if resc < 0 || resc == RESOURCE_DB {
 		d.handlePathError(w, r, resc)
