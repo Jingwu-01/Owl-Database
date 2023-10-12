@@ -118,7 +118,7 @@ func (d Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schem
 	}
 
 	// Successfully applied all the patches.
-	ret.Message = "patch applied"
+	ret.Message = "patches applied"
 	ret.PatchFailed = false
 	return ret, newdoc
 }
