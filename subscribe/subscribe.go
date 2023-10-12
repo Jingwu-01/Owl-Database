@@ -25,7 +25,7 @@ func (s subscriber) sendDelete(wf writeFlusher, path string) {
 	var event bytes.Buffer
 	now := time.Now()
 	millisecondsSinceEpoch := now.UnixNano() / 1e6
-	event.WriteString(fmt.Sprintf("event: delete\ndata: %d\nid: %d\n\n", path, millisecondsSinceEpoch))
+	event.WriteString(fmt.Sprintf("event: delete\ndata: %s\nid: %d\n\n", path, millisecondsSinceEpoch))
 	slog.Info("Sending", "msg", event.String())
 
 	// Send event
@@ -39,7 +39,7 @@ func (s subscriber) sendUpdate(wf writeFlusher, content string) {
 	var event bytes.Buffer
 	now := time.Now()
 	millisecondsSinceEpoch := now.UnixNano() / 1e6
-	event.WriteString(fmt.Sprintf("event: update\ndata: %d\nid: %d\n\n", content, millisecondsSinceEpoch))
+	event.WriteString(fmt.Sprintf("event: update\ndata: %s\nid: %d\n\n", content, millisecondsSinceEpoch))
 	slog.Info("Sending", "msg", event.String())
 
 	// Send event
@@ -80,8 +80,6 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Sent headers")
 
-	// Send intial message
-
 	for {
 		select {
 		case <-r.Context().Done():
@@ -91,6 +89,7 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case <-time.After(15 * time.Second):
 			// Send comments every 15 seconds to keep the connection
 			s.sendComment(wf)
+
 		}
 	}
 }
