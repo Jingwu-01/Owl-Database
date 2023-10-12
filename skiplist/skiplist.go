@@ -34,7 +34,7 @@ type Pair[K cmp.Ordered, V any] struct {
 	Value V
 }
 
-// Striing min and max values
+// String min and max values
 const (
 	STRING_MIN    = ""
 	STRING_MAX    = string('a' + 999999999) // Temporary hack
@@ -414,7 +414,7 @@ func (s SkipList[K, V]) query(start K, end K) (results []Pair[K, V]) {
 
 	// When at last level, add everything until reach end
 	for {
-		if curr.key > end {
+		if curr.key >= end {
 			break
 		} else {
 			results = append(results, Pair[K, V]{curr.key, curr.value})

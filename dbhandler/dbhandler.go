@@ -18,13 +18,14 @@ import (
 
 // Constants for getResourceFromPath
 const (
-	RESOURCE_PUT_BAD_NAME = -103
-	RESOURCE_INTERNAL     = -102
-	RESOURCE_BAD_SLASH    = -101
-	RESOURCE_NO_VERSION   = -100
-	RESOURCE_NO_DB        = -RESOURCE_DB
-	RESOURCE_NO_COLL      = -RESOURCE_COLL
-	RESOURCE_NO_DOC       = -RESOURCE_DOC
+	RESOURCE_BLANK_PATHNAME = -104
+	RESOURCE_PUT_BAD_NAME   = -103
+	RESOURCE_INTERNAL       = -102
+	RESOURCE_BAD_SLASH      = -101
+	RESOURCE_NO_VERSION     = -100
+	RESOURCE_NO_DB          = -RESOURCE_DB
+	RESOURCE_NO_COLL        = -RESOURCE_COLL
+	RESOURCE_NO_DOC         = -RESOURCE_DOC
 
 	RESOURCE_NULL  = 0
 	RESOURCE_DB    = 1
@@ -82,6 +83,10 @@ func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) 
 // The server implements the "handler" interface, it will recieve
 // requests from the user and delegate them to the proper methods.
 func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set headers of response
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	// Check if user is valid.
 	if r.Method == http.MethodOptions {
 		options.Options(w, r)
@@ -119,9 +124,6 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	// Action fork for GET Database and GET Document
 	coll, doc, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {
@@ -140,18 +142,14 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 // putting a new document or database at the desired
 // location.
 func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
-	// Set headers of response
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	// Obtain parent resource to put to
 	newRequest, newName, resc := cutRequest(r.URL.Path)
+
+	// PUT database
 	if resc == RESOURCE_DB_PD {
 		d.DatabasePut(w, r, newName)
 		return
-	}
-
-	if resc < 0 || resc == RESOURCE_DB {
+	} else if resc < 0 || resc == RESOURCE_DB {
 		d.handlePathError(w, r, resc)
 		return
 	}
@@ -160,16 +158,13 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
 	coll, doc, resc := d.getResourceFromPath(newRequest)
 	switch resc {
 	case RESOURCE_DB:
-		// should never happen (already handled)
-		d.handlePathError(w, r, RESOURCE_INTERNAL)
-	case RESOURCE_DB_PD:
-		// should never happen (already handled)
-		d.handlePathError(w, r, RESOURCE_INTERNAL)
+		// PUT document (in database)
+		coll.DocumentPut(w, r, newName, d.schema, name)
 	case RESOURCE_COLL:
-		// put a document to a collection
+		// PUT document (in collection)
 		coll.DocumentPut(w, r, newName, d.schema, name)
 	case RESOURCE_DOC:
-		// put a collection to a document
+		// PUT collection (in document)
 		doc.Children.CollectionPut(w, r, newName)
 	default:
 		d.handlePathError(w, r, resc)
@@ -180,19 +175,14 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
 // if they use the /auth path, and otherwise by deleting
 // the desired database or document.
 func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
-
-	// Set headers of response
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	// Obtain parent resource to delete the element from
 	newRequest, newName, resc := cutRequest(r.URL.Path)
+
+	// DELETE database
 	if resc == RESOURCE_DB_PD {
 		d.DatabasePut(w, r, newName)
 		return
-	}
-
-	if resc < 0 || resc == RESOURCE_DB {
+	} else if resc < 0 || resc == RESOURCE_DB {
 		d.handlePathError(w, r, resc)
 		return
 	}
@@ -201,11 +191,8 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	coll, doc, resc := d.getResourceFromPath(newRequest)
 	switch resc {
 	case RESOURCE_DB:
-		// should never happen (already handled)
-		d.handlePathError(w, r, RESOURCE_INTERNAL)
-	case RESOURCE_DB_PD:
-		// should never happen (already handled)
-		d.handlePathError(w, r, RESOURCE_INTERNAL)
+		// DELETE document (from database)
+		coll.DocumentDelete(w, r, newName)
 	case RESOURCE_COLL:
 		// delete a document from a collection
 		coll.DocumentDelete(w, r, newName)
@@ -221,11 +208,6 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 // by adding a document to the desired top level db with a
 // random name.
 func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, name string) {
-
-	// Set headers of response
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	// Action fork for POST Database and POST Collection
 	coll, _, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {
@@ -241,10 +223,6 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, name string) {
 // Handles a PATCH request by finding the proper document
 // and applying the desired patches.
 func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
-	// Set headers of response
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	// Patch requires the parent resource
 	newRequest, newName, resc := cutRequest(r.URL.Path)
 	if resc < 0 {
@@ -305,16 +283,10 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 	// Identify resource type
 	finalRes := RESOURCE_NULL
 
-	// Handle errors and databases
+	// Handle errors
 	if len(resources) == 0 {
 		// /v1/
 		return nil, nil, RESOURCE_BAD_SLASH
-	} else if len(resources) == 1 {
-		// /v1/db
-		finalRes = RESOURCE_DB_PD
-	} else if len(resources) == 2 {
-		// /v1/db/
-		finalRes = RESOURCE_DB
 	} else if len(resources)%2 == 1 {
 		// Slash used for a document or end on a collection
 		// /v1/db/doc/ or /v1/db/doc/col
@@ -323,7 +295,13 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 
 	// Identify the final resource
 	// If the last element ends with a slash, then it must be a collection
-	if len(resources) > 2 && resources[len(resources)-1] == "" {
+	if len(resources) == 1 {
+		// /v1/db
+		finalRes = RESOURCE_DB_PD
+	} else if len(resources) == 2 && resources[1] == "" {
+		// /v1/db/
+		finalRes = RESOURCE_DB
+	} else if len(resources) > 2 && resources[len(resources)-1] == "" {
 		finalRes = RESOURCE_COLL
 	} else {
 		finalRes = RESOURCE_DOC
@@ -337,21 +315,22 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 		if resource == "" {
 			if i != len(resources)-1 {
 				// Not last; invalid resource name
-				return nil, nil, -finalRes
-			} else {
-				// Blank database put/delete
-				if i == 0 {
-					return nil, nil, RESOURCE_BAD_SLASH
-				}
-
-				// Error checking
-				if lastColl == nil {
-					return nil, nil, RESOURCE_INTERNAL
-				}
-
-				// Return a database or collection
-				return lastColl, nil, finalRes
+				return nil, nil, RESOURCE_BLANK_PATHNAME
 			}
+
+			// Blank database put/delete
+			if i == 0 {
+				return nil, nil, RESOURCE_BAD_SLASH
+			}
+
+			// Error checking
+			if lastColl == nil {
+				slog.Error("GetResource: Returning NIL collection")
+				return nil, nil, RESOURCE_INTERNAL
+			}
+
+			// Return a database or collection
+			return lastColl, nil, finalRes
 		}
 
 		// Change behaviors depending on iteration
@@ -366,7 +345,8 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 			lastColl, found = lastDoc.Children.Collections.Find(resource)
 		}
 
-		if found {
+		if !found {
+			slog.Info("User could not find resource", "index", i, "resource", resource, "resources", resources)
 			return nil, nil, -finalRes
 		}
 	}
@@ -375,6 +355,7 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 	if finalRes == RESOURCE_DB_PD {
 		// Error check
 		if lastColl == nil {
+			slog.Error("GetResource: Returning NIL database")
 			return nil, nil, RESOURCE_INTERNAL
 		}
 
@@ -382,6 +363,7 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 	} else if finalRes == RESOURCE_DOC {
 		// Error check
 		if lastDoc == nil {
+			slog.Error("GetResource: Returning NIL document")
 			return nil, nil, RESOURCE_INTERNAL
 		}
 
@@ -439,6 +421,10 @@ func (d *Dbhandler) handlePathError(w http.ResponseWriter, r *http.Request, code
 		slog.Info("Invalid database (no slash) request for request", "path", r.URL.Path)
 		msg := fmt.Sprintf("The method does not support database resource without slash")
 		http.Error(w, msg, http.StatusBadRequest)
+	case RESOURCE_BLANK_PATHNAME:
+		slog.Info("Invalid path name (empty name for resource)", "path", r.URL.Path)
+		msg := fmt.Sprintf("Invalid path name (empty name for resource)")
+		http.Error(w, msg, http.StatusNotFound)
 	default:
 		slog.Info("Internal Error", "path", r.URL.Path)
 		msg := fmt.Sprintf("ERROR: handlePath bad error code: %d", code)
@@ -470,7 +456,7 @@ func cutRequest(request string) (string, string, int) {
 	} else if len(resources) == 1 {
 		// /v1/db
 		return "", resources[0], RESOURCE_DB_PD
-	} else if len(resources) == 2 {
+	} else if len(resources) == 2 && resources[1] == "" {
 		// /v1/db/
 		return "", resources[0], RESOURCE_DB
 	} else if len(resources)%2 == 1 {
@@ -482,18 +468,20 @@ func cutRequest(request string) (string, string, int) {
 	// Identify the final resource as a db or collection
 	// If the last element ends with a slash, then it must be a collection
 	li := strings.LastIndex(request, "/")
-	resName := request[li:]
+	resName := request[li+1:]
 	if resources[len(resources)-1] == "" {
 		// Collection - truncate by two
+		// Goes to a document (do not include slash)
 		li2 := strings.LastIndex(request[:li], "/")
 		finalRes = RESOURCE_COLL
 		resName = request[li2+1 : li]
 		request = request[:li2]
 	} else {
 		// Document - truncate by one
+		// Goes to collection (include slash)
 		finalRes = RESOURCE_DOC
-		request = request[:li]
+		request = request[:li+1]
 	}
-
+	slog.Info("Truncated resource path", "request", request, "resName", resName, "finalRes", finalRes)
 	return request, resName, finalRes
 }

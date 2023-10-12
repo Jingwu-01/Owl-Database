@@ -160,6 +160,8 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 	}
 
 	// Success: Construct response
+	w.Header().Set("Location", r.URL.Path)
+	slog.Info("", "DocumentCreate Location", r.URL.Path)
 	if updated {
 		slog.Info("Overwrote an old document", "path", path)
 		w.WriteHeader(http.StatusOK)
@@ -167,7 +169,6 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 		slog.Info("Created new document", "path", path)
 		w.WriteHeader(http.StatusCreated)
 	}
-	w.Header().Set("Location", r.URL.Path)
 	w.Write(jsonResponse)
 }
 
