@@ -340,7 +340,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 	}
 
 	// Marshal
-	jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+	jsonResponse, err := json.Marshal(putoutput{r.URL.Path + path})
 	if err != nil {
 		// This should never happen
 		slog.Error("Post: error marshaling", "error", err)
