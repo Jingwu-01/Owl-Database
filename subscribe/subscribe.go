@@ -8,7 +8,13 @@ import (
 	"time"
 )
 
-type subscriber struct{}
+var updateChannel = make(chan string, 100)
+var deleteChannel = make(chan string, 100)
+
+type subscriber struct {
+	updateCh chan string
+	deleteCh chan string
+}
 
 type writeFlusher interface {
 	http.ResponseWriter
@@ -16,7 +22,10 @@ type writeFlusher interface {
 }
 
 func New() subscriber {
-	return subscriber{}
+	return subscriber{
+		updateCh: updateChannel,
+		deleteCh: deleteChannel,
+	}
 }
 
 // Send delete event
@@ -67,6 +76,13 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mode := r.URL.Query().Get("mode")
+	if mode != "subscribe" {
+		slog.Info("subscribe: invalid mode")
+		http.Error(w, "Invalid mode", http.StatusBadRequest)
+		return
+	}
+
 	slog.Info("Converted to writeFlusher")
 
 	// Set up event stream connection
@@ -89,7 +105,10 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case <-time.After(15 * time.Second):
 			// Send comments every 15 seconds to keep the connection
 			s.sendComment(wf)
-
+		case content := <-s.updateCh:
+			s.sendUpdate(wf, content)
+		case path := <-s.deleteCh:
+			s.sendDelete(wf, path)
 		}
 	}
 }
