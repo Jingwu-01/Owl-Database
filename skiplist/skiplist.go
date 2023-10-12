@@ -34,10 +34,10 @@ type Pair[K cmp.Ordered, V any] struct {
 	Value V
 }
 
-// String min and max values
+// String min and max values for strings
 const (
 	STRING_MIN    = ""
-	STRING_MAX    = string('a' + 999999999) // Temporary hack
+	STRING_MAX    = string(rune(256)) // Assuming no unicode, ASCII only
 	DEFAULT_LEVEL = 5
 )
 
@@ -390,35 +390,21 @@ func (s SkipList[K, V]) Query(ctx context.Context, start K, end K) (results []Pa
 
 // Implementation of the Query method
 func (s SkipList[K, V]) query(start K, end K) (results []Pair[K, V]) {
-	// Initialize vars for searching the list.
-	pred := s.head
-	level := pred.topLevel
-
 	// Initialize return values
 	results = make([]Pair[K, V], 0)
 
-	// Find successor at each level.
-	curr := pred
-	for level > 0 {
-		// Initialize current node.
-		curr = pred.next[level].Load()
-
-		// Look through this level of the list until we go past key.
-		for start > curr.key {
-			pred = curr
-			curr = pred.next[level].Load()
-		}
-
-		level--
-	}
-
-	// When at last level, add everything until reach end
+	// Do a linear search at the bottom of the skip list
+	// Not possible to 'skip' in query as its possible to skip past elements that satisfy
+	curr := s.head.next[0].Load()
 	for {
-		if curr.key >= end {
+		next := curr.next[0].Load()
+		if curr.key < start {
+			curr = curr.next[0].Load()
+		} else if curr.key > end || next == nil {
 			break
 		} else {
 			results = append(results, Pair[K, V]{curr.key, curr.value})
-			curr = curr.next[level].Load()
+			curr = next
 		}
 	}
 
