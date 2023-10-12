@@ -216,7 +216,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	}
 
 	// Unmarshal the body into an array of patches.
-	json.Unmarshal(body, &patches)
+	err = json.Unmarshal(body, &patches)
 	if err != nil {
 		slog.Error("Patch document: error unmarshaling patch document request", "error", err)
 		http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)

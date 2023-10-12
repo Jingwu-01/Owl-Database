@@ -39,9 +39,9 @@ func TestServeHTTPSequential(t *testing.T) {
 		{httptest.NewRequest(http.MethodPut, "/v1/db1", nil),
 			httptest.NewRecorder(),
 			"{\"uri\":\"/v1/db1\"}", 201},
-		// {httptest.NewRequest(http.MethodGet, "/v1/db1/", nil),
-		// 	httptest.NewRecorder(),
-		// 	"[]", 200},
+		{httptest.NewRequest(http.MethodGet, "/v1/db1/", nil),
+			httptest.NewRecorder(),
+			"[]", 200},
 		{httptest.NewRequest(http.MethodPut, "/v1/db1/doc1", strings.NewReader("{\"prop\":100}")),
 			httptest.NewRecorder(),
 			"{\"uri\":\"/v1/db1/doc1\"}", 201},
@@ -79,9 +79,9 @@ func TestServeHTTPSequential(t *testing.T) {
 		{httptest.NewRequest(http.MethodGet, "/v1/db1/doc1", nil),
 			httptest.NewRecorder(),
 			doc1str, 200},
-		// {httptest.NewRequest(http.MethodGet, "/v1/db1/", nil),
-		// 	httptest.NewRecorder(),
-		// 	"[" + doc1str + "]", 200},
+		{httptest.NewRequest(http.MethodGet, "/v1/db1/", nil),
+			httptest.NewRecorder(),
+			"[" + doc1str + "]", 200},
 	}
 
 	for _, d := range data {
@@ -133,12 +133,15 @@ func TestServeHTTPSequential(t *testing.T) {
 
 	// Test that patch returns correct codes - modification is tested in patcher.
 	data = []test{
-		{httptest.NewRequest(http.MethodPatch, "/v1/db1/doc1", strings.NewReader("[{\"op\":ObjectAdd,\"path\":\"/a\",\"value\":100}]")),
+		{httptest.NewRequest(http.MethodPatch, "/v1/db1/doc1", strings.NewReader("[{\"op\":\"ObjectAdd\",\"path\":\"/a\",\"value\":100}]")),
 			httptest.NewRecorder(),
 			"{\"uri\":\"/v1/db1/doc1\",\"patchFailed\":false,\"message\":\"patches applied\"}", 200},
-		{httptest.NewRequest(http.MethodPatch, "/v1/db1/doc1", strings.NewReader("[{\"op\":ObjectAdd,\"path\":\"/b\",\"value\":100},{\"op\":ObjectAdd,\"path\":\"/c\",\"value\":100}]")),
+		{httptest.NewRequest(http.MethodPatch, "/v1/db1/doc1", strings.NewReader("[{\"op\":\"ObjectAdd\",\"path\":\"/b\",\"value\":100},{\"op\":\"ObjectAdd\",\"path\":\"/c\",\"value\":100}]")),
 			httptest.NewRecorder(),
 			"{\"uri\":\"/v1/db1/doc1\",\"patchFailed\":false,\"message\":\"patches applied\"}", 200},
+		{httptest.NewRequest(http.MethodPatch, "/v1/db1/doc1", strings.NewReader("[{\"op\":\"ArrayAdd\",\"path\":\"/b\",\"value\":100},{\"op\":\"ObjectAdd\",\"path\":\"/c\",\"value\":100}]")),
+			httptest.NewRecorder(),
+			"", 400},
 	}
 
 	for _, d := range data {
