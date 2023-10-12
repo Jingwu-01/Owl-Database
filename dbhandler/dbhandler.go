@@ -34,11 +34,6 @@ const (
 	RESOURCE_DB_PD = 4 // specifically for put and delete db w/o slash
 )
 
-// A putoutput stores the response to a put request.
-type putoutput struct {
-	Uri string `json:"uri"`
-}
-
 // An authenticator is something which can validate a login token as one supported
 // by a dbhandler or not.
 type Authenticator interface {

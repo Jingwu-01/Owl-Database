@@ -13,6 +13,7 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/pathprocessor"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/relative"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -101,7 +102,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 	}
 
 	// Marshal
-	jsonResponse, err := json.Marshal(putoutput{path})
+	jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
 	if err != nil {
 		// This should never happen
 		slog.Error("Put: error marshaling", "error", err)
@@ -141,7 +142,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			return currValue, nil
 		} else {
 			// Create new document
-			newDoc := New(key, name, docBody)
+			newDoc := New(relative.GetRelativePathNonDB(r.URL.Path), name, docBody)
 			return &newDoc, nil
 		}
 	}
@@ -339,7 +340,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 	}
 
 	// Marshal
-	jsonResponse, err := json.Marshal(putoutput{path})
+	jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
 	if err != nil {
 		// This should never happen
 		slog.Error("Post: error marshaling", "error", err)
