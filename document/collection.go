@@ -32,7 +32,6 @@ type Collection struct {
 }
 
 // Creates a new collection.
-// TODO: should this be a pointer instead?
 func NewCollection() Collection {
 	newSL := skiplist.New[string, *Document](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return Collection{&newSL}
@@ -132,7 +131,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				return nil, errors.New("Bad timestamp match")
 			}
 
-			// Modify data
+			// Modify metadata
 			currValue.Overwrite(docBody, name)
 
 			// Delete Children of this document
@@ -190,10 +189,10 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Patches a document in this collection
 func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
 	// Patch document case
 	// Retrieve document
-	// TODO: maybe update this to use upsert?
 	doc, ok := c.Documents.Find(docpath)
 
 	// If document does not exist return error
@@ -265,8 +264,9 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	w.Write(jsonResponse)
 }
 
-// note: a lot of shared logic with documentput, could refactor for shared method
+// Posts a document in this collection
 func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema *jsonschema.Schema, name string) {
+	// note: a lot of shared logic with documentput, could refactor for shared method
 	// Read body of requests
 	desc, err := io.ReadAll(r.Body)
 	defer r.Body.Close()

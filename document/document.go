@@ -22,6 +22,7 @@ type meta struct {
 	LastModifiedAt int64  `json:"lastModifiedAt"`
 }
 
+// Create a new metadata
 func newMeta(user string) meta {
 	return meta{user, time.Now().UnixMilli(), user, time.Now().UnixMilli()}
 }
@@ -36,6 +37,7 @@ type Docoutput struct {
 	Meta meta        `json:"meta"`
 }
 
+// Create a new docoutput
 func newOutput(path, user string, docBody interface{}) Docoutput {
 	return Docoutput{path, docBody, newMeta(user)}
 }
