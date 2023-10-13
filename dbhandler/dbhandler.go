@@ -175,7 +175,8 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 // On success, deletes the desired resource based on the specified path.
 func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	// Send path deleted to the subscribe channel
-	deleteCh <- r.URL.Path
+
+	// deleteCh <- r.URL.Path
 
 	// Obtain parent resource to delete the element from
 	newRequest, newName, resc := cutRequest(r.URL.Path)
