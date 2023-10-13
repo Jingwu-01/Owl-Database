@@ -21,11 +21,15 @@ func TestAuthentication(t *testing.T) {
 	testAuthenticator := New()
 
 	authData := []test{
-		// Login: Bad Request
+		// Login: Bad Request (No username)
 		{httptest.NewRequest(http.MethodPost, "/auth", strings.NewReader("{\"username\":\"\"}")),
 			httptest.NewRecorder(),
 			"No username in request body", 400},
-		// Logout: Unauthorized
+		// Login: Bad Request (Invalid format)
+		{httptest.NewRequest(http.MethodPost, "/auth", strings.NewReader("{\"username\":}")),
+			httptest.NewRecorder(),
+			"invalid login format", 400},
+		// Logout: Unauthorized (missing token)
 		{httptest.NewRequest(http.MethodDelete, "/auth", nil),
 			httptest.NewRecorder(),
 			"Missing or malformed bearer token", 401},
