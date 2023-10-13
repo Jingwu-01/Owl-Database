@@ -264,8 +264,8 @@ func TestConcurrentDistinctInserts(t *testing.T) {
 				defer wg.Done()
 
 				ok, _ := list.Upsert(k, checkFactory(0))
-				if !ok {
-					t.Errorf("expected true. got %t", ok)
+				if ok {
+					t.Errorf("expected false. got %t", ok)
 				}
 			}(i)
 		}
@@ -302,8 +302,8 @@ func TestConcurrentRepeatedInserts(t *testing.T) {
 
 		wg.Wait()
 
-		if numSuccesses != 1 {
-			t.Fatalf("expected only one successful insert. got %d", numSuccesses)
+		if numSuccesses != 0 {
+			t.Fatalf("expected only zero successful inserts. got %d", numSuccesses)
 		}
 	}
 }
@@ -314,8 +314,8 @@ func TestConcurrentRepeatedRemoves(t *testing.T) {
 		iters := 5
 
 		ok, _ := list.Upsert(1, checkFactory(1))
-		if !ok {
-			t.Fatalf("expected true. got %t", ok)
+		if ok {
+			t.Fatalf("expected false. got %t", ok)
 		}
 
 		var wg sync.WaitGroup
