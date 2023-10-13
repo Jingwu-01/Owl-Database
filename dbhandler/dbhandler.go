@@ -16,7 +16,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
-// Constants for getResourceFromPath
+// Result code from getResourceFromPath()
 const (
 	RESOURCE_BLANK_PATHNAME = -104
 	RESOURCE_PUT_BAD_NAME   = -103
@@ -86,17 +86,17 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		options.Options(w, r)
 	} else {
-		valid, name := d.authenticator.ValidateToken(w, r)
+		valid, username := d.authenticator.ValidateToken(w, r)
 		if valid {
 			switch r.Method {
 			case http.MethodGet:
 				d.get(w, r)
 			case http.MethodPut:
-				d.put(w, r, name)
+				d.put(w, r, username)
 			case http.MethodPost:
-				d.post(w, r, name)
+				d.post(w, r, username)
 			case http.MethodPatch:
-				d.patch(w, r, name)
+				d.patch(w, r, username)
 			case http.MethodDelete:
 				d.delete(w, r)
 				// Add delete request URLs to deleteChannel
@@ -111,8 +111,10 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles GET request by either returning a
-// document body or set of all documents in a collection.
+// Top-level GET handler
+//
+// Handles GET document, GET database, or GET collection.
+// On success, sends a response body of all document or a set of all documents.
 func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 	// Check if we are in the subscribe mode
 	mode := r.URL.Query().Get("mode")
@@ -135,10 +137,11 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles case where we have PUT request by either
-// putting a new document or database at the desired
-// location.
-func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
+// Top-level PUT handler
+//
+// Handles PUT document, PUT database, or PUT collection.
+// On success, puts the specified resource at the specified path.
+func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string) {
 	// Obtain parent resource to put to
 	newRequest, newName, resc := cutRequest(r.URL.Path)
 
@@ -156,10 +159,10 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
 	switch resc {
 	case RESOURCE_DB:
 		// PUT document (in database)
-		coll.DocumentPut(w, r, newName, d.schema, name)
+		coll.DocumentPut(w, r, newName, d.schema, username)
 	case RESOURCE_COLL:
 		// PUT document (in collection)
-		coll.DocumentPut(w, r, newName, d.schema, name)
+		coll.DocumentPut(w, r, newName, d.schema, username)
 	case RESOURCE_DOC:
 		// PUT collection (in document)
 		doc.Children.CollectionPut(w, r, newName)
@@ -168,9 +171,10 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, name string) {
 	}
 }
 
-// Handles a DELETE request either by logging out the user
-// if they use the /auth path, and otherwise by deleting
-// the desired database or document.
+// Top-level delete resource handler
+//
+// Handles DELETE database, DELETE document, DELETE collection.
+// On success, deletes the desired resource based on the specified path.
 func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	// Obtain parent resource to delete the element from
 	newRequest, newName, resc := cutRequest(r.URL.Path)
@@ -201,10 +205,12 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Handles a POST request either by logging in the user or
-// by adding a document to the desired top level db with a
-// random name.
-func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, name string) {
+// Top-level POST resource handler
+//
+// Handles POST Database, POST Collection.
+// On success, adds the requested document with a randomly generated name
+// to a database or collection.
+func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string) {
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
 		subscribe.New().ServeHTTP(w, r)
@@ -214,16 +220,18 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, name string) {
 	coll, _, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {
 	case RESOURCE_DB:
-		d.DatabasePost(w, r, coll, name)
+		d.DatabasePost(w, r, coll, username)
 	case RESOURCE_COLL:
-		coll.DocumentPost(w, r, d.schema, name)
+		coll.DocumentPost(w, r, d.schema, username)
 	default:
 		d.handlePathError(w, r, resc)
 	}
 }
 
-// Handles a PATCH request by finding the proper document
-// and applying the desired patches.
+// Top-level PATCH handler
+//
+// Handles PATCH database, PATCH collection
+// On success, applies the desired patches.
 func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 	// Patch requires the parent resource
 	newRequest, newName, resc := cutRequest(r.URL.Path)
@@ -245,34 +253,39 @@ func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 	}
 }
 
-// Handles top level database gets
+// Specific handler for GET database
 func (d *Dbhandler) DatabaseGet(w http.ResponseWriter, r *http.Request, coll *document.Collection) {
 	// Same behavior as collection for now
 	coll.CollectionGet(w, r)
 }
 
-// Handles top level database puts
+// Specific handler for PUT database
 func (d *Dbhandler) DatabasePut(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Same behavior as collection for now
 	d.databases.CollectionPut(w, r, dbpath)
 }
 
-// Handles top level database posts
+// Specific handler for POST database
 func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll *document.Collection, name string) {
 	// Same behavior as collection for now
 	coll.DocumentPost(w, r, d.schema, name)
 }
 
-// Delete a top level database
+// Specific handler for DELETE database
 func (d *Dbhandler) DatabaseDelete(w http.ResponseWriter, r *http.Request, name string) {
 	// Same behavior as collection for now
 	d.databases.CollectionDelete(w, r, name)
 }
 
-// Obtains the last resource at the end of the path string
-// if cut == true, then return a preceding resource
-// returns a collection or document based on the last resource of the path
-// from this path or a negative error code. This path must include the version
+/*
+Obtains resource from the specified path.
+
+On success, returns a collection if the path leads to a collection or a database,
+or a document if the path leads to a document. Returns a result code indicating
+the type of resource returned.
+
+On error, returns a resource error code indicating the type of error found.
+*/
 func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *document.Document, int) {
 	// Check version
 	path, found := strings.CutPrefix(request, "/v1/")
@@ -338,13 +351,13 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 		// Change behaviors depending on iteration
 		if i == 0 {
 			// Database
-			lastColl, found = d.databases.Collections.Find(resource)
+			lastColl, found = d.databases.CollectionFind(resource)
 		} else if i%2 == 1 {
 			// Document
-			lastDoc, found = lastColl.Documents.Find(resource)
+			lastDoc, found = lastColl.DocumentFind(resource)
 		} else if i > 0 && i%2 == 0 {
 			// Collection
-			lastColl, found = lastDoc.Children.Collections.Find(resource)
+			lastColl, found = lastDoc.Children.CollectionFind(resource)
 		}
 
 		if !found {
@@ -377,8 +390,6 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 }
 
 // Handle path errors returned from getResourceFromPath
-// Note the error messages here reflect the type of request by the user,
-// not the type of error from getResourceFromPath.
 func (d *Dbhandler) handlePathError(w http.ResponseWriter, r *http.Request, code int) {
 	switch code {
 	case RESOURCE_PUT_BAD_NAME:
@@ -434,12 +445,16 @@ func (d *Dbhandler) handlePathError(w http.ResponseWriter, r *http.Request, code
 	}
 }
 
-// Truncate a path's resource by one
-// Returns:
-// *	request: the truncated new request
-// *	resName: the resource that is truncated
-// *	finalRes: path request code
-func cutRequest(request string) (string, string, int) {
+/*
+Truncate a path's resource by one; that is, obtain the parent
+of the specified resource.
+
+On success, returns a new truncated path, the name of the resource
+that was truncated, and the type of resource that was truncated.
+
+On error, returns a resource error code.
+*/
+func cutRequest(request string) (truncatedRequest string, resourceName string, resourceType int) {
 	// Check version
 	path, found := strings.CutPrefix(request, "/v1/")
 	if !found {

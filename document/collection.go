@@ -28,11 +28,10 @@ A collection is a concurrent skip list of documents,
 which is sorted by document name.
 */
 type Collection struct {
-	Documents *skiplist.SkipList[string, *Document]
+	documents *skiplist.SkipList[string, *Document]
 }
 
 // Creates a new collection.
-// TODO: should this be a pointer instead?
 func NewCollection() Collection {
 	newSL := skiplist.New[string, *Document](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return Collection{&newSL}
@@ -48,7 +47,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	returnDocs := make([]Docoutput, 0)
 
 	// Make query on collection
-	pairs, err := c.Documents.Query(r.Context(), interval[0], interval[1])
+	pairs, err := c.documents.Query(r.Context(), interval[0], interval[1])
 
 	if err != nil {
 		// TODO: type of error?
@@ -132,7 +131,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				return nil, errors.New("Bad timestamp match")
 			}
 
-			// Modify data
+			// Modify metadata
 			currValue.Overwrite(docBody, name)
 
 			// Delete Children of this document
@@ -147,7 +146,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 		}
 	}
 
-	updated, err := c.Documents.Upsert(path, docUpsert)
+	updated, err := c.documents.Upsert(path, docUpsert)
 	if err != nil {
 		switch err.Error() {
 		case "Bad timestamp":
@@ -176,7 +175,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 // Deletes a document from this collection
 func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Just request a delete on the specified element
-	_, deleted := c.Documents.Remove(docpath)
+	_, deleted := c.documents.Remove(docpath)
 
 	// Handle response
 	if !deleted {
@@ -190,11 +189,11 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Patches a document in this collection
 func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
 	// Patch document case
 	// Retrieve document
-	// TODO: maybe update this to use upsert?
-	doc, ok := c.Documents.Find(docpath)
+	doc, ok := c.documents.Find(docpath)
 
 	// If document does not exist return error
 	if !ok {
@@ -250,7 +249,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 			}
 		}
 
-		updated, err := c.Documents.Upsert(docpath, patchUpsert)
+		updated, err := c.documents.Upsert(docpath, patchUpsert)
 		if !updated {
 			// This shouldn't happen
 			slog.Error("Patch: ", "error", err.Error())
@@ -268,8 +267,9 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	w.Write(jsonResponse)
 }
 
-// note: a lot of shared logic with documentput, could refactor for shared method
+// Posts a document in this collection
 func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema *jsonschema.Schema, name string) {
+	// note: a lot of shared logic with documentput, could refactor for shared method
 	// Read body of requests
 	desc, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -323,7 +323,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 
 		// Convert the random bytes to a hexadecimal string
 		randomName := hex.EncodeToString(token)
-		_, upErr := c.Documents.Upsert(randomName, docUpsert)
+		_, upErr := c.documents.Upsert(randomName, docUpsert)
 		if upErr != nil {
 			switch upErr.Error() {
 			case "exists": // do nothing
@@ -356,4 +356,9 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Location", r.URL.Path)
 	w.Write(jsonResponse)
+}
+
+// Find a document in this collection
+func (c *Collection) DocumentFind(resource string) (coll *Document, found bool) {
+	return c.documents.Find(resource)
 }

@@ -8,6 +8,12 @@ import (
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 )
 
+/*
+Convert a string representing string intervals into the elements inside the interval.
+
+The interval must be of the format [x,y] where x and y are the min and max of
+the interval. x and y may be optional where they are substituted for minima and maxima.
+*/
 func GetInterval(intervalStr string) [2]string {
 	interval := [2]string{skiplist.STRING_MIN, skiplist.STRING_MAX}
 	// Must be in array form
