@@ -76,13 +76,6 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mode := r.URL.Query().Get("mode")
-	if mode != "subscribe" {
-		slog.Info("subscribe: invalid mode")
-		http.Error(w, "Invalid mode", http.StatusBadRequest)
-		return
-	}
-
 	slog.Info("Converted to writeFlusher")
 
 	// Set up event stream connection
