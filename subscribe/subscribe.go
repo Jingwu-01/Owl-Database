@@ -1,3 +1,6 @@
+// Package subscribe has structs and methods for
+// supporting subscription to documents and collections
+// as per the owlDB specification.
 package subscribe
 
 import (
@@ -57,7 +60,7 @@ func (s Subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 func (s Subscriber) sendComment(wf writeFlusher) {
 	// Create event
 	var event bytes.Buffer
-	event.WriteString(fmt.Sprintf(": This is a comment event that keeps the server running"))
+	event.WriteString(fmt.Sprintf(": This is a comment event that keeps the server running\n\n"))
 	slog.Info("Sending", "msg", event.String())
 
 	// Send event
