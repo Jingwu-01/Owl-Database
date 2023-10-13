@@ -66,13 +66,18 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 // Deletes a collection inside this CollectionHolder
 func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Just request a delete on the specified element
-	_, deleted := c.collections.Remove(dbpath)
+	col, deleted := c.collections.Remove(dbpath)
 
 	// Handle response
 	if !deleted {
 		slog.Info("Collection does not exist", "path", r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 		return
+	}
+
+	// Notify collection subscribers
+	for _, sub := range col.Subscribers {
+		sub.DeleteCh <- r.URL.Path
 	}
 
 	slog.Info("Deleted Collection", "path", r.URL.Path)

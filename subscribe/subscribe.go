@@ -33,7 +33,7 @@ func (s Subscriber) sendDelete(wf writeFlusher, path string) {
 	// Create event
 	var event bytes.Buffer
 	now := time.Now()
-	millisecondsSinceEpoch := now.UnixNano() / 1e6
+	millisecondsSinceEpoch := now.UnixMilli()
 	event.WriteString(fmt.Sprintf("event: delete\ndata: \"%s\"\nid: %d\n\n", path, millisecondsSinceEpoch))
 	slog.Info("Sending", "msg", event.String())
 
@@ -47,7 +47,7 @@ func (s Subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 	// Create event
 	var event bytes.Buffer
 	now := time.Now()
-	millisecondsSinceEpoch := now.UnixNano() / 1e6
+	millisecondsSinceEpoch := now.UnixMilli()
 	event.WriteString(fmt.Sprintf("event: update\ndata: %s\nid: %d\n\n", jsonObj, millisecondsSinceEpoch))
 	slog.Info("Sending", "msg", event.String())
 
@@ -60,7 +60,7 @@ func (s Subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 func (s Subscriber) sendComment(wf writeFlusher) {
 	// Create event
 	var event bytes.Buffer
-	event.WriteString(fmt.Sprintf(": This is a comment event that keeps the server running\n\n"))
+	event.WriteString(": This is a comment event that keeps the server running\n\n")
 	slog.Info("Sending", "msg", event.String())
 
 	// Send event

@@ -242,16 +242,14 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 		return
 	}
 
-	deleteMSG := "\"" + r.URL.Path + "\""
-
 	// Notify doc subscribers
 	for _, sub := range doc.Subscribers {
-		sub.DeleteCh <- deleteMSG
+		sub.DeleteCh <- r.URL.Path
 	}
 
 	// Notify collection subscribers
 	for _, sub := range c.Subscribers {
-		sub.DeleteCh <- deleteMSG
+		sub.DeleteCh <- r.URL.Path
 	}
 
 	slog.Info("Deleted Document", "path", r.URL.Path)
