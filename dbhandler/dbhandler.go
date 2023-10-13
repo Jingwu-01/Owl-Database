@@ -18,8 +18,7 @@ import (
 
 // Result code from getResourceFromPath()
 const (
-	RESOURCE_BLANK_PATHNAME = -104
-	RESOURCE_PUT_BAD_NAME   = -103
+	RESOURCE_BLANK_PATHNAME = -103
 	RESOURCE_INTERNAL       = -102
 	RESOURCE_BAD_SLASH      = -101
 	RESOURCE_NO_VERSION     = -100
@@ -78,6 +77,8 @@ func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) 
 // The server implements the "handler" interface, it will recieve
 // requests from the user and delegate them to the proper methods.
 func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Request being handled", "path", r.URL.Path)
+
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -147,7 +148,10 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 	if resc == RESOURCE_DB_PD {
 		d.DatabasePut(w, r, newName)
 		return
-	} else if resc < 0 || resc == RESOURCE_DB {
+	} else if resc == RESOURCE_DB {
+		d.customError(w, r, "Bad syntax for PUT database (extra slash)", http.StatusBadRequest)
+		return
+	} else if resc <= 0 {
 		d.handlePathError(w, r, resc)
 		return
 	}
@@ -389,57 +393,61 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 // Handle path errors returned from getResourceFromPath
 func (d *Dbhandler) handlePathError(w http.ResponseWriter, r *http.Request, code int) {
 	switch code {
-	case RESOURCE_PUT_BAD_NAME:
-		slog.Info("User used blank name", "path", r.URL.Path)
-		msg := fmt.Sprintf("Blank name used for request: %s", r.URL.Path)
-		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_BAD_SLASH:
 		// TODO: confirm this case (that it returns a bad request, not a not found)
 		// /v1/a/b/ /v1/a /v1/a/b/c
 		slog.Info("Missing collection or database slash", "path", r.URL.Path)
-		msg := fmt.Sprintf("Bad slash: %s", r.URL.Path)
+		msg := fmt.Sprintf("Malformed pathname (bad slashes)")
 		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_NO_VERSION:
 		slog.Info("User path did not include version", "path", r.URL.Path)
-		msg := fmt.Sprintf("path missing version: %s", r.URL.Path)
+		msg := fmt.Sprintf("Path missing version")
 		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_NO_DB:
 		slog.Info("User attempted to access non-extant database", "path", r.URL.Path)
-		msg := fmt.Sprintf("Database does not exist")
+		msg := fmt.Sprintf("Could not find resource")
 		http.Error(w, msg, http.StatusNotFound)
 	case RESOURCE_NO_DOC:
 		slog.Info("User attempted to access non-extant document", "path", r.URL.Path)
-		msg := fmt.Sprintf("Document does not exist")
+		msg := fmt.Sprintf("Could not find resource")
 		http.Error(w, msg, http.StatusNotFound)
 	case RESOURCE_NO_COLL:
 		slog.Info("User attempted to access non-extant collection", "path", r.URL.Path)
-		msg := fmt.Sprintf("Collection does not exist")
+		msg := fmt.Sprintf("Could not find resource")
 		http.Error(w, msg, http.StatusNotFound)
 	case RESOURCE_DB:
 		slog.Info("Invalid database resource for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("The method does not support database resource")
+		msg := fmt.Sprintf("Method does not support databases")
 		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_COLL:
 		slog.Info("Invalid collection request for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("The method does not support collection resource")
+		msg := fmt.Sprintf("Method does not support collections")
 		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_DOC:
 		slog.Info("Invalid document request for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("The method does not support document resource")
+		msg := fmt.Sprintf("Method does not support documents")
 		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_DB_PD:
 		slog.Info("Invalid database (no slash) request for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("The method does not support database resource without slash")
+		msg := fmt.Sprintf("Method does not support databases or bad database syntax")
 		http.Error(w, msg, http.StatusBadRequest)
 	case RESOURCE_BLANK_PATHNAME:
 		slog.Info("Invalid path name (empty name for resource)", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path name (empty name for resource)")
 		http.Error(w, msg, http.StatusNotFound)
 	default:
-		slog.Info("Internal Error", "path", r.URL.Path)
+		slog.Info("Internal Error: unhandled error code", "path", r.URL.Path, "code", code)
 		msg := fmt.Sprintf("ERROR: handlePath bad error code: %d", code)
 		http.Error(w, msg, http.StatusInternalServerError)
 	}
+}
+
+// A generic error handler with a custom message and error code
+// Used instead of handlePathError()
+func (d *Dbhandler) customError(w http.ResponseWriter, r *http.Request, message string, code int) {
+	slog.Info(message, "path", r.URL.Path)
+	msg := fmt.Sprintf(message)
+	http.Error(w, msg, code)
 }
 
 /*
