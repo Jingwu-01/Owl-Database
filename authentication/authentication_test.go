@@ -25,7 +25,7 @@ func TestAuthentication(t *testing.T) {
 		{httptest.NewRequest(http.MethodPost, "/auth", strings.NewReader("{\"username\":\"\"}")),
 			httptest.NewRecorder(),
 			"No username in request body", 400},
-		// Logout: 	Unauthorized
+		// Logout: Unauthorized
 		{httptest.NewRequest(http.MethodDelete, "/auth", nil),
 			httptest.NewRecorder(),
 			"Missing or malformed bearer token", 401},
