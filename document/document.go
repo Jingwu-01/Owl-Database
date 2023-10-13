@@ -70,7 +70,14 @@ func (d *Document) Overwrite(docBody interface{}, name string) {
 }
 
 // Gets a document
-func (d Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
+func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
+	// Subscribe mode
+	mode := r.URL.Query().Get("mode")
+	if mode == "subscribe" {
+		subscriber := subscribe.New()
+		d.Subscribers = append(d.Subscribers, subscriber)
+		go subscriber.ServeHTTP(w, r)
+	}
 	// Convert to JSON and send
 	jsonDoc, err := json.Marshal(d.Output)
 
