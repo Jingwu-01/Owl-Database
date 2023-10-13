@@ -41,14 +41,6 @@ func NewCollection() Collection {
 
 // Gets a collection of documents
 func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
-	// Subscribe mode
-	mode := r.URL.Query().Get("mode")
-	if mode == "subscribe" {
-		subscriber := subscribe.New()
-		c.Subscribers = append(c.Subscribers, subscriber)
-		go subscriber.ServeHTTP(w, r)
-	}
-
 	// Get queries
 	queries := r.URL.Query()
 	interval := pathprocessor.GetInterval(queries.Get("interval"))
@@ -70,6 +62,28 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 		returnDocs = append(returnDocs, pair.Value.Output)
 	}
 
+	// Subscribe mode
+	mode := r.URL.Query().Get("mode")
+	if mode == "subscribe" {
+		subscriber := subscribe.New()
+		c.Subscribers = append(c.Subscribers, subscriber)
+		w.Header().Set("Content-Type", "text/event-stream")
+		go subscriber.ServeHTTP(w, r)
+
+		for _, output := range returnDocs {
+			updateMSG, err := json.Marshal(output)
+			if err != nil {
+				// This should never happen
+				slog.Error("Put: error marshaling", "error", err)
+				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				return
+			}
+			subscriber.UpdateCh <- updateMSG
+		}
+
+		return
+	}
+
 	// Convert to JSON and send
 	jsonToDo, err := json.Marshal(returnDocs)
 	if err != nil {
@@ -78,8 +92,10 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonToDo)
-	slog.Info("GET: success")
+	slog.Info("Col/DB GET: success")
 }
 
 // Puts a document into a collection

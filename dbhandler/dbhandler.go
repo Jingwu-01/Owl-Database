@@ -78,7 +78,9 @@ func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) 
 // requests from the user and delegate them to the proper methods.
 func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
-	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Check if user is valid.

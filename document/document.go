@@ -71,13 +71,6 @@ func (d *Document) Overwrite(docBody interface{}, name string) {
 
 // Gets a document
 func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
-	// Subscribe mode
-	mode := r.URL.Query().Get("mode")
-	if mode == "subscribe" {
-		subscriber := subscribe.New()
-		d.Subscribers = append(d.Subscribers, subscriber)
-		go subscriber.ServeHTTP(w, r)
-	}
 	// Convert to JSON and send
 	jsonDoc, err := json.Marshal(d.Output)
 
@@ -88,6 +81,18 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Subscribe mode
+	mode := r.URL.Query().Get("mode")
+	if mode == "subscribe" {
+		subscriber := subscribe.New()
+		d.Subscribers = append(d.Subscribers, subscriber)
+		w.Header().Set("Content-Type", "text/event-stream")
+		go subscriber.ServeHTTP(w, r)
+		subscriber.UpdateCh <- jsonDoc
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonDoc)
 	slog.Info("GET: success")
 }
