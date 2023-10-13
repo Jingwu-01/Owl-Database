@@ -63,10 +63,12 @@ func New[K cmp.Ordered, V any](minKey, maxKey K, max_level int) SkipList[K, V] {
 	tail.fullyLinked = atomic.Bool{}
 	tail.marked.Store(false)
 	tail.fullyLinked.Store(true)
+	tail.next = make([]atomic.Pointer[node[K, V]], max_level)
 
 	// Link head to tail
 	for i := 0; i < max_level; i++ {
 		head.next[i].Store(&tail)
+		tail.next[i].Store(nil)
 	}
 	// Set head to fully linked once its been linked to tail.
 	head.fullyLinked.Swap(true)

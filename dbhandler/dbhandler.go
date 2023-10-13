@@ -209,6 +209,11 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 // On success, adds the requested document with a randomly generated name
 // to a database or collection.
 func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string) {
+	mode := r.URL.Query().Get("mode")
+	if mode == "subscribe" {
+		subscribe.New().ServeHTTP(w, r)
+		return
+	}
 	// Action fork for POST Database and POST Collection
 	coll, _, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {

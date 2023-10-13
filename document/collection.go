@@ -215,7 +215,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	}
 
 	// Unmarshal the body into an array of patches.
-	json.Unmarshal(body, &patches)
+	err = json.Unmarshal(body, &patches)
 	if err != nil {
 		slog.Error("Patch document: error unmarshaling patch document request", "error", err)
 		http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)
@@ -225,6 +225,15 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	// Apply the patches to the document
 	patchreply, newdoc := doc.ApplyPatches(patches, schema)
 	patchreply.Uri = r.URL.Path
+
+	// Marshal it into a json reply
+	jsonResponse, err := json.Marshal(patchreply)
+	if err != nil {
+		// This should never happen
+		slog.Error("Patch: error marshaling", "error", err)
+		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		return
+	}
 
 	if !patchreply.PatchFailed {
 		// Need to modify metadata
@@ -247,20 +256,14 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 			return
 		}
+		slog.Info("Patched a document", "path", r.URL.Path)
+		w.Header().Set("Location", r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	} else {
+		slog.Info("Failed to patch a document", "path", r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	// Marshal it into a json reply
-	jsonResponse, err := json.Marshal(patchreply)
-	if err != nil {
-		// This should never happen
-		slog.Error("Patch: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
-	}
-
-	slog.Info("Patched a document", "path", r.URL.Path)
-	w.Header().Set("Location", r.URL.Path)
-	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
 }
 
