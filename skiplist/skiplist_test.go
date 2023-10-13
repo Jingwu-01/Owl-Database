@@ -28,14 +28,10 @@ func TestUpsertSuccess(t *testing.T) {
 	slog.SetDefault(slog.New(h))
 
 	list := New[int, int](0, 10, 3)
-	ok, err := list.Upsert(1, checkFactory(6))
+	_, err := list.Upsert(1, checkFactory(6))
 
 	if err != nil {
 		t.Fatalf("expected no errors, got %s", err.Error())
-	}
-
-	if !ok {
-		t.Fatalf("expected true. got %t", ok)
 	}
 }
 
@@ -108,19 +104,19 @@ func TestMultipleUpserts(t *testing.T) {
 
 	list := New[int, int](0, 10, 3)
 
-	ok, err := list.Upsert(1, checkFactory(6))
-	if !ok || err != nil {
-		t.Fatalf("expected true. got %t", ok)
+	_, err := list.Upsert(1, checkFactory(6))
+	if err != nil {
+		t.Fatalf("expected no error. got %v", err)
 	}
 
-	ok, err = list.Upsert(2, checkFactory(6))
-	if !ok || err != nil {
-		t.Fatalf("expected true. got %t", ok)
+	_, err = list.Upsert(2, checkFactory(6))
+	if err != nil {
+		t.Fatalf("expected true. got %v", err)
 	}
 
-	ok, err = list.Upsert(3, checkFactory(6))
-	if !ok || err != nil {
-		t.Fatalf("expected true. got %t", ok)
+	_, err = list.Upsert(3, checkFactory(6))
+	if err != nil {
+		t.Fatalf("expected true. got %v", err)
 	}
 }
 
@@ -160,8 +156,8 @@ func TestRemoveRemoves(t *testing.T) {
 		t.Fatalf("expected false. got %t", ok)
 	}
 
-	ok, err := list.Upsert(1, checkFactory(6))
-	if !ok || err != nil {
+	_, err := list.Upsert(1, checkFactory(6))
+	if err != nil {
 		t.Fatalf("expected true, nil. got %t, %s", ok, err.Error())
 	}
 
