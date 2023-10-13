@@ -203,6 +203,11 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 // by adding a document to the desired top level db with a
 // random name.
 func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, name string) {
+	mode := r.URL.Query().Get("mode")
+	if mode == "subscribe" {
+		subscribe.New().ServeHTTP(w, r)
+		return
+	}
 	// Action fork for POST Database and POST Collection
 	coll, _, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {
