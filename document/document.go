@@ -83,6 +83,7 @@ func (d Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	slog.Info("GET: success")
 }
 
+// A PatchResponse stores the response from a Patch operation
 type PatchResponse struct {
 	Uri         string `json:"uri"`
 	PatchFailed bool   `json:"patchFailed"`

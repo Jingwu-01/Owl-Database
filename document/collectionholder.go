@@ -10,18 +10,20 @@ import (
 )
 
 /*
-A collectionholder is a skiplist that holds or other collections
+A collectionholder is a concurrent skiplist that holds collections,
+which is sorted by collection name.
 */
 type CollectionHolder struct {
-	Collections *skiplist.SkipList[string, *Collection]
+	collections *skiplist.SkipList[string, *Collection]
 }
 
-// Creates a new collectioon holder
+// Creates a new collection holder
 func NewHolder() CollectionHolder {
 	newSL := skiplist.New[string, *Collection](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return CollectionHolder{&newSL}
 }
 
+// Create a new collection inside this CollectionHolder
 func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Add a new database to dbhandler if it is not already there; otherwise error
 	// Define the upsert method - only create a new collection
@@ -34,7 +36,7 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	_, err := c.Collections.Upsert(dbpath, dbUpsert)
+	_, err := c.collections.Upsert(dbpath, dbUpsert)
 	// Handle errors
 	if err != nil {
 		slog.Error(err.Error())
@@ -62,9 +64,10 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 	return
 }
 
+// Deletes a collection inside this CollectionHolder
 func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Just request a delete on the specified element
-	_, deleted := c.Collections.Remove(dbpath)
+	_, deleted := c.collections.Remove(dbpath)
 
 	// Handle response
 	if !deleted {
@@ -76,4 +79,9 @@ func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Reque
 	slog.Info("Deleted Collection", "path", r.URL.Path)
 	w.Header().Set("Location", r.URL.Path)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Find a collection in this collection holder
+func (c *CollectionHolder) CollectionFind(resource string) (coll *Collection, found bool) {
+	return c.collections.Find(resource)
 }

@@ -344,13 +344,13 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 		// Change behaviors depending on iteration
 		if i == 0 {
 			// Database
-			lastColl, found = d.databases.Collections.Find(resource)
+			lastColl, found = d.databases.CollectionFind(resource)
 		} else if i%2 == 1 {
 			// Document
-			lastDoc, found = lastColl.Documents.Find(resource)
+			lastDoc, found = lastColl.DocumentFind(resource)
 		} else if i > 0 && i%2 == 0 {
 			// Collection
-			lastColl, found = lastDoc.Children.Collections.Find(resource)
+			lastColl, found = lastDoc.Children.CollectionFind(resource)
 		}
 
 		if !found {

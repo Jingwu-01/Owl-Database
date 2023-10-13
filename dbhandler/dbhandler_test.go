@@ -69,8 +69,8 @@ func TestServeHTTPSequential(t *testing.T) {
 	}
 
 	// Have to get specific values to check documents for equality
-	db1, _ := testhandler.databases.Collections.Find("db1")
-	doc1, _ := db1.Documents.Find("doc1")
+	db1, _ := testhandler.databases.CollectionFind("db1")
+	doc1, _ := db1.DocumentFind("doc1")
 	doc1str := fmt.Sprintf("{\"path\":\"/doc1\",\"doc\":{\"prop\":100},\"meta\":{\"createdBy\":\"%s\",\"createdAt\":%d,\"lastModifiedBy\":\"%s\",\"lastModifiedAt\":%d}}",
 		doc1.Output.Meta.CreatedBy, doc1.Output.Meta.CreatedAt, doc1.Output.Meta.LastModifiedBy, doc1.Output.Meta.LastModifiedAt)
 	data = []test{

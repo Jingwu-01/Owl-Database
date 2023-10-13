@@ -28,20 +28,20 @@ type SkipList[K cmp.Ordered, V any] struct {
 	totalOps *atomic.Int32
 }
 
-// For query returns.
+// A struct encapsulating the key, value returns from a query.
 type Pair[K cmp.Ordered, V any] struct {
 	Key   K
 	Value V
 }
 
-// String min and max values for strings
+// For strings, the min and max values
 const (
 	STRING_MIN    = ""
 	STRING_MAX    = string(rune(256)) // Assuming no unicode, ASCII only
 	DEFAULT_LEVEL = 5
 )
 
-// For Upsert
+// A function that determines whether to update a value given a key's current value
 type UpdateCheck[K cmp.Ordered, V any] func(key K, currValue V, exists bool) (newValue V, err error)
 
 // Creates an empty new skiplist object
@@ -150,8 +150,8 @@ func (s SkipList[K, V]) Find(key K) (V, bool) {
 	return found.value, found.fullyLinked.Load() && !found.marked.Load()
 }
 
-// NOTE: (TODO?) changed return behavior of updated s.t. it is true
-// only if it updates a value, not whether on success
+// A general function to update or insert a value in this skip list
+// depending on the UpdateCheck function.
 func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, err error) {
 	slog.Debug("Called Upsert", "key", key) // Call trace
 
@@ -264,7 +264,9 @@ func (s SkipList[K, V]) Upsert(key K, check UpdateCheck[K, V]) (updated bool, er
 	}
 }
 
-func (s SkipList[K, V]) Remove(key K) (V, bool) {
+// Remove an element from this skiplist by its key.
+// On success, return the value. Otherwise, return nil.
+func (s SkipList[K, V]) Remove(key K) (value V, found bool) {
 	slog.Debug("Called Remove", "key", key) // Call trace
 
 	isMarked := false
@@ -367,6 +369,8 @@ func (s SkipList[K, V]) Remove(key K) (V, bool) {
 	}
 }
 
+// Multiple-pass query; find an element between start and key values.
+// Context can be passed in to stop the query operation if elapsed.
 func (s SkipList[K, V]) Query(ctx context.Context, start K, end K) (results []Pair[K, V], err error) {
 	slog.Debug("Called Query", "start", start, "end", end) // Call trace
 
@@ -388,7 +392,7 @@ func (s SkipList[K, V]) Query(ctx context.Context, start K, end K) (results []Pa
 	}
 }
 
-// Implementation of the Query method
+// Single-pass query; find an element between start and end key values.
 func (s SkipList[K, V]) query(start K, end K) (results []Pair[K, V]) {
 	// Initialize return values
 	results = make([]Pair[K, V], 0)
