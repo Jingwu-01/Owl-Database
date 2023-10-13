@@ -99,6 +99,8 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				d.patch(w, r, name)
 			case http.MethodDelete:
 				d.delete(w, r)
+				// Add delete request URLs to deleteChannel
+				subscribe.DeleteChannel <- r.URL.Path
 			default:
 				// If user used method we do not support.
 				slog.Info("User used unsupported method", "method", r.Method)
