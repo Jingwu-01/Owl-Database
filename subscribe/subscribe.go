@@ -13,9 +13,6 @@ type writeFlusher interface {
 	http.Flusher
 }
 
-var UpdateChannel = make(chan []byte, 100)
-var DeleteChannel = make(chan string, 100)
-
 type subscriber struct {
 	updateCh chan []byte
 	deleteCh chan string
@@ -23,12 +20,12 @@ type subscriber struct {
 
 func New() subscriber {
 	return subscriber{
-		updateCh: UpdateChannel,
-		deleteCh: DeleteChannel,
+		updateCh: make(chan []byte, 1000),
+		deleteCh: make(chan string, 1000),
 	}
 }
 
-// Send delete event
+// Send delete event when a document or collection is deleted
 func (s subscriber) sendDelete(wf writeFlusher, path string) {
 	// Create event
 	var event bytes.Buffer
@@ -42,7 +39,7 @@ func (s subscriber) sendDelete(wf writeFlusher, path string) {
 	wf.Flush()
 }
 
-// Send update event
+// Send update event when a document or collection is updated
 func (s subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 	// Create event
 	var event bytes.Buffer
@@ -56,7 +53,7 @@ func (s subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 	wf.Flush()
 }
 
-// Send comment event
+// Send comment event to keep the server running
 func (s subscriber) sendComment(wf writeFlusher) {
 	// Create event
 	var event bytes.Buffer
@@ -93,7 +90,7 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			// Client closed connection
-			slog.Info("Subsribe: Client closed connection")
+			slog.Info("Subscribe: Client closed connection")
 			return
 		case <-time.After(15 * time.Second):
 			// Send comments every 15 seconds to keep the connection

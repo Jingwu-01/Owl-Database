@@ -99,8 +99,6 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				d.patch(w, r, username)
 			case http.MethodDelete:
 				d.delete(w, r)
-				// Add delete request URLs to deleteChannel
-				subscribe.DeleteChannel <- r.URL.Path
 			default:
 				// If user used method we do not support.
 				slog.Info("User used unsupported method", "method", r.Method)
@@ -116,7 +114,7 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Handles GET document, GET database, or GET collection.
 // On success, sends a response body of all document or a set of all documents.
 func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
-	// Check if we are in the subscribe mode
+	// Subscribe mode
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
 		subscribe.New().ServeHTTP(w, r)
@@ -176,6 +174,9 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 // Handles DELETE database, DELETE document, DELETE collection.
 // On success, deletes the desired resource based on the specified path.
 func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
+	// Send path deleted to the subscribe channel
+	deleteCh <- r.URL.Path
+
 	// Obtain parent resource to delete the element from
 	newRequest, newName, resc := cutRequest(r.URL.Path)
 
@@ -211,11 +212,6 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 // On success, adds the requested document with a randomly generated name
 // to a database or collection.
 func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string) {
-	mode := r.URL.Query().Get("mode")
-	if mode == "subscribe" {
-		subscribe.New().ServeHTTP(w, r)
-		return
-	}
 	// Action fork for POST Database and POST Collection
 	coll, _, resc := d.getResourceFromPath(r.URL.Path)
 	switch resc {
