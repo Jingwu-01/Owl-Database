@@ -385,8 +385,6 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 func (d *Dbhandler) handlePathError(w http.ResponseWriter, r *http.Request, code int) {
 	switch code {
 	case RESOURCE_BAD_SLASH:
-		// TODO: confirm this case (that it returns a bad request, not a not found)
-		// /v1/a/b/ /v1/a /v1/a/b/c
 		slog.Info("Missing collection or database slash", "path", r.URL.Path)
 		msg := fmt.Sprintf("Malformed pathname (bad slashes)")
 		http.Error(w, msg, http.StatusBadRequest)
