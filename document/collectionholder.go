@@ -29,7 +29,7 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 	// Define the upsert method - only create a new collection
 	dbUpsert := func(key string, currValue *Collection, exists bool) (*Collection, error) {
 		if exists {
-			return nil, errors.New("Database already exists")
+			return nil, errors.New("database already exists")
 		} else {
 			newColl := NewCollection()
 			return &newColl, nil
@@ -61,7 +61,6 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 	w.Header().Set("Location", r.URL.Path)
 	w.WriteHeader(http.StatusCreated)
 	w.Write(jsonResponse)
-	return
 }
 
 // Deletes a collection inside this CollectionHolder

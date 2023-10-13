@@ -15,6 +15,7 @@ import (
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/pathprocessor"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/relative"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -28,13 +29,14 @@ A collection is a concurrent skip list of documents,
 which is sorted by document name.
 */
 type Collection struct {
-	documents *skiplist.SkipList[string, *Document]
+	documents   *skiplist.SkipList[string, *Document]
+	subscribers []subscribe.Subscriber
 }
 
 // Creates a new collection.
 func NewCollection() Collection {
 	newSL := skiplist.New[string, *Document](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
-	return Collection{&newSL}
+	return Collection{&newSL, make([]subscribe.Subscriber, 0)}
 }
 
 // Gets a collection of documents
@@ -128,11 +130,29 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			// Conditional put
 			matchOld := timeStamp == currValue.Output.Meta.LastModifiedAt || timeStamp == currValue.Output.Meta.CreatedAt
 			if timeStamp != -1 && !matchOld {
-				return nil, errors.New("Bad timestamp match")
+				return nil, errors.New("bad timestamp match")
 			}
 
 			// Modify metadata
 			currValue.Overwrite(docBody, name)
+
+			updateMSG, err := json.Marshal(currValue.Output)
+			if err != nil {
+				// This should never happen
+				slog.Error("Put: error marshaling", "error", err)
+				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				return nil, errors.New("marshalling error")
+			}
+
+			// Notify doc subscribers
+			for _, sub := range currValue.Subscribers {
+				sub.UpdateCh <- updateMSG
+			}
+
+			// Notify collection subscribers
+			for _, sub := range c.subscribers {
+				sub.UpdateCh <- updateMSG
+			}
 
 			// Delete Children of this document
 			newHolder := NewHolder()
@@ -142,6 +162,20 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 		} else {
 			// Create new document
 			newDoc := New(relative.GetRelativePathNonDB(r.URL.Path), name, docBody)
+
+			updateMSG, err := json.Marshal(newDoc.Output)
+			if err != nil {
+				// This should never happen
+				slog.Error("Put: error marshaling", "error", err)
+				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				return nil, errors.New("marshalling error")
+			}
+
+			// Notify collection subscribers
+			for _, sub := range c.subscribers {
+				sub.UpdateCh <- updateMSG
+			}
+
 			return &newDoc, nil
 		}
 	}
@@ -175,13 +209,25 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 // Deletes a document from this collection
 func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Just request a delete on the specified element
-	_, deleted := c.documents.Remove(docpath)
+	doc, deleted := c.documents.Remove(docpath)
 
 	// Handle response
 	if !deleted {
 		slog.Info("Document does not exist", "path", r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 		return
+	}
+
+	deleteMSG := "\"" + r.URL.Path + "\""
+
+	// Notify doc subscribers
+	for _, sub := range doc.Subscribers {
+		sub.DeleteCh <- deleteMSG
+	}
+
+	// Notify collection subscribers
+	for _, sub := range c.subscribers {
+		sub.DeleteCh <- deleteMSG
 	}
 
 	slog.Info("Deleted Document", "path", r.URL.Path)
@@ -239,13 +285,31 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 		// Need to modify metadata
 		doc.Overwrite(newdoc, name)
 
+		updateMSG, err := json.Marshal(doc.Output)
+		if err != nil {
+			// This should never happen
+			slog.Error("Put: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
+		}
+
+		// Notify doc subscribers
+		for _, sub := range doc.Subscribers {
+			sub.UpdateCh <- updateMSG
+		}
+
+		// Notify collection subscribers
+		for _, sub := range c.subscribers {
+			sub.UpdateCh <- updateMSG
+		}
+
 		// Upsert to reinsert
 		patchUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
 			if exists {
 				return doc, nil
 			} else {
 				// We expect the document to already exist
-				return nil, errors.New("Not found")
+				return nil, errors.New("not found")
 			}
 		}
 
@@ -304,6 +368,20 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 		} else {
 			// Create new document
 			newDoc := New(key, name, docBody)
+
+			updateMSG, err := json.Marshal(newDoc.Output)
+			if err != nil {
+				// This should never happen
+				slog.Error("Post: error marshaling", "error", err)
+				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				return nil, errors.New("marshalling error")
+			}
+
+			// Notify collection subscribers
+			for _, sub := range c.subscribers {
+				sub.UpdateCh <- updateMSG
+			}
+
 			return &newDoc, nil
 		}
 	}

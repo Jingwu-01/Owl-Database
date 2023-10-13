@@ -51,19 +51,19 @@ func TestServeHTTPSequential(t *testing.T) {
 		// get document: document not found
 		{httptest.NewRequest(http.MethodGet, "/v1/db1/doc2", nil),
 			httptest.NewRecorder(),
-			"Document does not exist", 404},
+			"", 404},
 		// get database: database not found
-		{httptest.NewRequest(http.MethodGet, "/v1/db1/", nil),
+		{httptest.NewRequest(http.MethodGet, "/v1/db2/", nil),
 			httptest.NewRecorder(),
-			"Database does not exist", 404},
+			"", 404},
 		// get database or database: bad request
-		{httptest.NewRequest(http.MethodGet, "invalidPath", nil),
+		{httptest.NewRequest(http.MethodGet, "/invalidPath", nil),
 			httptest.NewRecorder(),
-			"string", 400},
+			"", 400},
 		// put document or database: bad request
-		{httptest.NewRequest(http.MethodPut, "invalidPath", nil),
+		{httptest.NewRequest(http.MethodPut, "/invalidPath", nil),
 			httptest.NewRecorder(),
-			"string", 400},
+			"", 400},
 	}
 
 	i := 0

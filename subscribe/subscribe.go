@@ -13,20 +13,20 @@ type writeFlusher interface {
 	http.Flusher
 }
 
-type subscriber struct {
-	updateCh chan []byte
-	deleteCh chan string
+type Subscriber struct {
+	UpdateCh chan []byte
+	DeleteCh chan string
 }
 
-func New() subscriber {
-	return subscriber{
-		updateCh: make(chan []byte, 1000),
-		deleteCh: make(chan string, 1000),
+func New() Subscriber {
+	return Subscriber{
+		UpdateCh: make(chan []byte, 1000),
+		DeleteCh: make(chan string, 1000),
 	}
 }
 
 // Send delete event when a document or collection is deleted
-func (s subscriber) sendDelete(wf writeFlusher, path string) {
+func (s Subscriber) sendDelete(wf writeFlusher, path string) {
 	// Create event
 	var event bytes.Buffer
 	now := time.Now()
@@ -40,7 +40,7 @@ func (s subscriber) sendDelete(wf writeFlusher, path string) {
 }
 
 // Send update event when a document or collection is updated
-func (s subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
+func (s Subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 	// Create event
 	var event bytes.Buffer
 	now := time.Now()
@@ -54,7 +54,7 @@ func (s subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 }
 
 // Send comment event to keep the server running
-func (s subscriber) sendComment(wf writeFlusher) {
+func (s Subscriber) sendComment(wf writeFlusher) {
 	// Create event
 	var event bytes.Buffer
 	event.WriteString(fmt.Sprintf(": This is a comment event that keeps the server running"))
@@ -65,7 +65,7 @@ func (s subscriber) sendComment(wf writeFlusher) {
 	wf.Flush()
 }
 
-func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s Subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Convert ResponseWriter to a writeFlusher
 	wf, ok := w.(writeFlusher)
 	if !ok {
@@ -95,9 +95,9 @@ func (s subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case <-time.After(15 * time.Second):
 			// Send comments every 15 seconds to keep the connection
 			s.sendComment(wf)
-		case jsonObj := <-s.updateCh:
+		case jsonObj := <-s.UpdateCh:
 			s.sendUpdate(wf, jsonObj)
-		case path := <-s.deleteCh:
+		case path := <-s.DeleteCh:
 			s.sendDelete(wf, path)
 		}
 	}

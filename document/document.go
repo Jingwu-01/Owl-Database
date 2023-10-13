@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -44,14 +45,15 @@ func newOutput(path, user string, docBody interface{}) Docoutput {
 
 // A document is a document plus a concurrent skip list of collections
 type Document struct {
-	Output   Docoutput
-	Children *CollectionHolder
+	Output      Docoutput
+	Children    *CollectionHolder
+	Subscribers []subscribe.Subscriber
 }
 
 // Creates a new document.
 func New(path, user string, docBody interface{}) Document {
 	newH := NewHolder()
-	return Document{newOutput(path, user, docBody), &newH}
+	return Document{newOutput(path, user, docBody), &newH, make([]subscribe.Subscriber, 0)}
 }
 
 // Overwrite the body of a document upon recieving a put.
