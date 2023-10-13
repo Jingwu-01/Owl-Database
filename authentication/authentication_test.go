@@ -16,7 +16,7 @@ type test struct {
 	code     int
 }
 
-// authorization test (Note that login successful and logout successfull need to be tested through Swagger, because the token is randomly generated each time.)
+// authorization test (Note that login successful and logout successful need to be tested through Swagger, because the token is randomly generated each time.)
 func TestAuthentication(t *testing.T) {
 	testAuthenticator := New()
 
