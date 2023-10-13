@@ -12,7 +12,6 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -80,7 +79,9 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Request being handled", "path", r.URL.Path)
 
 	// Set headers of response
-	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Check if user is valid.
@@ -115,12 +116,6 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Handles GET document, GET database, or GET collection.
 // On success, sends a response body of all document or a set of all documents.
 func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
-	// Subscribe mode
-	mode := r.URL.Query().Get("mode")
-	if mode == "subscribe" {
-		subscribe.New().ServeHTTP(w, r)
-		return
-	}
 
 	// Action fork for GET Database and GET Document
 	coll, doc, resc := d.getResourceFromPath(r.URL.Path)
@@ -178,10 +173,6 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 // Handles DELETE database, DELETE document, DELETE collection.
 // On success, deletes the desired resource based on the specified path.
 func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
-	// Send path deleted to the subscribe channel
-
-	// deleteCh <- r.URL.Path
-
 	// Obtain parent resource to delete the element from
 	newRequest, newName, resc := cutRequest(r.URL.Path)
 
