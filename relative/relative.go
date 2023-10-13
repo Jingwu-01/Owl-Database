@@ -1,4 +1,6 @@
-// Package that helps with string processing.
+// Package relative implements methods to get
+// the relative paths for NonDB objects and
+// for db objects.
 package relative
 
 import (

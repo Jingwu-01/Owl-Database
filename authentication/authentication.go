@@ -1,3 +1,7 @@
+// Package authentication has structs and methods
+// for enabling login and logout functionality per
+// the owlDB specifications. Implements the handler
+// interface, expects input urls to start with "/auth."
 package authentication
 
 import (
@@ -44,6 +48,8 @@ func (a *Authenticator) InstallUsers(users map[string]string) {
 	}
 }
 
+// Serves http requests with the path starting with /auth. Logs in
+// on a post request, logs out on a delete, and sends options if requested.
 func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -60,7 +66,7 @@ func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// generateToken generates a cryptographically secure and random string token
+// generateToken generates a cryptographically secure and random string token.
 func generateToken() (string, error) {
 	// Generate a 16-byte or 128-bit token
 	token := make([]byte, 16)
@@ -115,7 +121,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 	}
 }
 
-// Handles login request.
+// Logs the user who made the input request into the owlDB system.
 func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")
@@ -169,7 +175,7 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Login: success", "user", username)
 }
 
-// Handles logout request.
+// Logs the user who made this request out of the owlDB system.
 func (a *Authenticator) logout(w http.ResponseWriter, r *http.Request) {
 	// Set headers of response
 	w.Header().Set("Content-Type", "application/json")

@@ -1,5 +1,5 @@
 // Package options implements the options method for
-// http requests for the owlDB
+// http requests for the owlDB.
 package options
 
 import "net/http"
