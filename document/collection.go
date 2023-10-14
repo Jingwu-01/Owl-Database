@@ -176,10 +176,6 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				sub.UpdateCh <- updateMSG
 			}
 
-			// Delete Children of this document
-			newHolder := NewHolder()
-			currValue.Children = &newHolder
-
 			return currValue, nil
 		} else {
 			// Create new document
@@ -323,8 +319,6 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 		patchUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
 			if exists {
 				// Delete Children of this document
-				newHolder := NewHolder()
-				doc.Children = &newHolder
 				return doc, nil
 			} else {
 				// We expect the document to already exist

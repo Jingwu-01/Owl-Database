@@ -46,7 +46,7 @@ func newOutput(path, user string, docBody interface{}) Docoutput {
 // A document is a document plus a concurrent skip list of collections
 type Document struct {
 	output      Docoutput
-	Children    *CollectionHolder
+	children    *CollectionHolder
 	Subscribers []subscribe.Subscriber
 }
 
@@ -67,6 +67,10 @@ func (d *Document) Overwrite(docBody interface{}, name string) {
 
 	// Modify it again in the doc
 	d.output = existingDocOutput
+
+	// Wipes the children of this document
+	newChildren := NewHolder()
+	d.children = &newChildren
 }
 
 // Gets a document
@@ -92,6 +96,21 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonDoc)
 	slog.Info("GET: success")
+}
+
+// Puts a new collection in this document.
+func (d *Document) CollectionPut(w http.ResponseWriter, r *http.Request, newName string) {
+	d.children.CollectionPut(w, r, newName)
+}
+
+// Deletes a collection in this document.
+func (d *Document) CollectionDelete(w http.ResponseWriter, r *http.Request, newName string) {
+	d.children.CollectionDelete(w, r, newName)
+}
+
+// Finds a collection in this document
+func (d *Document) CollectionFind(resource string) (*Collection, bool) {
+	return d.children.CollectionFind(resource)
 }
 
 // A PatchResponse stores the response from a Patch operation

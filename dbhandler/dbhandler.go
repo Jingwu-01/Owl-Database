@@ -162,7 +162,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 		coll.DocumentPut(w, r, newName, d.schema, username)
 	case RESOURCE_DOC:
 		// PUT collection (in document)
-		doc.Children.CollectionPut(w, r, newName)
+		doc.CollectionPut(w, r, newName)
 	default:
 		d.handlePathError(w, r, resc)
 	}
@@ -196,7 +196,7 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 		coll.DocumentDelete(w, r, newName)
 	case RESOURCE_DOC:
 		// delete a collection from a document
-		doc.Children.CollectionDelete(w, r, newName)
+		doc.CollectionDelete(w, r, newName)
 	default:
 		d.handlePathError(w, r, resc)
 	}
@@ -349,7 +349,7 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 			lastDoc, found = lastColl.DocumentFind(resource)
 		} else if i > 0 && i%2 == 0 {
 			// Collection
-			lastColl, found = lastDoc.Children.CollectionFind(resource)
+			lastColl, found = lastDoc.CollectionFind(resource)
 		}
 
 		if !found {
