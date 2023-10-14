@@ -45,7 +45,7 @@ func newOutput(path, user string, docBody interface{}) Docoutput {
 
 // A document is a document plus a concurrent skip list of collections
 type Document struct {
-	Output      Docoutput
+	output      Docoutput
 	Children    *CollectionHolder
 	Subscribers []subscribe.Subscriber
 }
@@ -58,7 +58,7 @@ func New(path, user string, docBody interface{}) Document {
 
 // Overwrite the body of a document upon recieving a put.
 func (d *Document) Overwrite(docBody interface{}, name string) {
-	existingDocOutput := d.Output
+	existingDocOutput := d.output
 	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
 	existingDocOutput.Meta.LastModifiedBy = name
 
@@ -66,17 +66,14 @@ func (d *Document) Overwrite(docBody interface{}, name string) {
 	existingDocOutput.Doc = docBody
 
 	// Modify it again in the doc
-	d.Output = existingDocOutput
+	d.output = existingDocOutput
 }
 
 // Gets a document
 func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	// Convert to JSON and send
-	jsonDoc, err := json.Marshal(d.Output)
-
+	jsonDoc, err := d.GetJSONBody()
 	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
 		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 		return
 	}
@@ -107,12 +104,12 @@ type PatchResponse struct {
 // Applys a slice of patches to this document.
 // Returns a PatchResponse without the Uri field
 // set, expecting it to be set by caller.
-func (d Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (PatchResponse, interface{}) {
-	slog.Info("Applying patch to document", "path", d.Output.Path)
+func (d *Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (PatchResponse, interface{}) {
+	slog.Info("Applying patch to document", "path", d.output.Path)
 	var ret PatchResponse
 	var err error
 
-	newdoc := d.Output.Doc
+	newdoc := d.output.Doc
 	for i, patch := range patches {
 		newdoc, err = patcher.ApplyPatch(newdoc, patch)
 		slog.Debug("Patching", "patched doc", newdoc)
@@ -138,4 +135,27 @@ func (d Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schem
 	ret.Message = "patches applied"
 	ret.PatchFailed = false
 	return ret, newdoc
+}
+
+// Gets the last modified at field from
+// this document for conditional put.
+func (d *Document) GetLastModified() int64 {
+	return d.output.Meta.LastModifiedAt
+}
+
+// Gets the JSON Object that this document stores.
+func (d *Document) GetJSONBody() ([]byte, error) {
+	jsonBody, err := json.Marshal(d.output)
+	if err != nil {
+		// This should never happen
+		slog.Error("Error marshalling doc body", "error", err)
+		return nil, err
+	}
+
+	return jsonBody, err
+}
+
+// Gets the JSON Object that this document stores.
+func (d *Document) GetRawBody() interface{} {
+	return d.output
 }

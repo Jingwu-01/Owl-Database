@@ -46,7 +46,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	interval := pathprocessor.GetInterval(queries.Get("interval"))
 
 	// Build a list of document outputs
-	returnDocs := make([]Docoutput, 0)
+	returnDocs := make([]interface{}, 0)
 
 	// Make query on collection
 	pairs, err := c.documents.Query(r.Context(), interval[0], interval[1])
@@ -54,12 +54,13 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// TODO: type of error?
 		slog.Info("Collection could not retrieve query in time")
+		http.Error(w, `"Timeout while querying collection"`, http.StatusRequestTimeout)
 		return
 	}
 
 	for _, pair := range pairs {
 		// Just collect the value and get the docoutput from that
-		returnDocs = append(returnDocs, pair.Value.Output)
+		returnDocs = append(returnDocs, pair.Value.GetRawBody())
 	}
 
 	// Subscribe mode
@@ -71,16 +72,15 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 		go subscriber.ServeHTTP(w, r)
 
 		for _, output := range returnDocs {
-			updateMSG, err := json.Marshal(output)
+			jsonBody, err := json.Marshal(output)
 			if err != nil {
 				// This should never happen
-				slog.Error("Put: error marshaling", "error", err)
+				slog.Error("Get: error marshaling", "error", err)
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 				return
 			}
-			subscriber.UpdateCh <- updateMSG
+			subscriber.UpdateCh <- jsonBody
 		}
-
 		return
 	}
 
@@ -152,7 +152,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 	docUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
 		if exists {
 			// Conditional put
-			matchOld := timeStamp == currValue.Output.Meta.LastModifiedAt || timeStamp == currValue.Output.Meta.CreatedAt
+			matchOld := timeStamp == currValue.GetLastModified()
 			if timeStamp != -1 && !matchOld {
 				return nil, errors.New("bad timestamp match")
 			}
@@ -160,12 +160,10 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			// Modify metadata
 			currValue.Overwrite(docBody, name)
 
-			updateMSG, err := json.Marshal(currValue.Output)
+			updateMSG, err := currValue.GetJSONBody()
 			if err != nil {
-				// This should never happen
-				slog.Error("Put: error marshaling", "error", err)
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return nil, errors.New("marshalling error")
+				return nil, err
 			}
 
 			// Notify doc subscribers
@@ -187,10 +185,8 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			// Create new document
 			newDoc := New(relative.GetRelativePathNonDB(r.URL.Path), name, docBody)
 
-			updateMSG, err := json.Marshal(newDoc.Output)
+			updateMSG, err := newDoc.GetJSONBody()
 			if err != nil {
-				// This should never happen
-				slog.Error("Put: error marshaling", "error", err)
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 				return nil, errors.New("marshalling error")
 			}
@@ -307,10 +303,8 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 		// Need to modify metadata
 		doc.Overwrite(newdoc, name)
 
-		updateMSG, err := json.Marshal(doc.Output)
+		updateMSG, err := doc.GetJSONBody()
 		if err != nil {
-			// This should never happen
-			slog.Error("Put: error marshaling", "error", err)
 			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 			return
 		}
@@ -328,6 +322,9 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 		// Upsert to reinsert
 		patchUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
 			if exists {
+				// Delete Children of this document
+				newHolder := NewHolder()
+				doc.Children = &newHolder
 				return doc, nil
 			} else {
 				// We expect the document to already exist
@@ -391,10 +388,8 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 			// Create new document
 			newDoc := New(key, name, docBody)
 
-			updateMSG, err := json.Marshal(newDoc.Output)
+			updateMSG, err := newDoc.GetJSONBody()
 			if err != nil {
-				// This should never happen
-				slog.Error("Post: error marshaling", "error", err)
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 				return nil, errors.New("marshalling error")
 			}

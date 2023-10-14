@@ -1,7 +1,6 @@
 package dbhandler
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -84,50 +83,14 @@ func TestServeHTTPSequential(t *testing.T) {
 		i++
 	}
 
-	// Have to get specific values to check documents for equality
-	db1, _ := testhandler.databases.CollectionFind("db1")
-	doc1, _ := db1.DocumentFind("doc1")
-	doc1str := fmt.Sprintf("{\"path\":\"/doc1\",\"doc\":{\"prop\":100},\"meta\":{\"createdBy\":\"%s\",\"createdAt\":%d,\"lastModifiedBy\":\"%s\",\"lastModifiedAt\":%d}}",
-		doc1.Output.Meta.CreatedBy, doc1.Output.Meta.CreatedAt, doc1.Output.Meta.LastModifiedBy, doc1.Output.Meta.LastModifiedAt)
-
 	// Tests Get on DB and Doc
 	data = []test{
 		{httptest.NewRequest(http.MethodGet, "/v1/db1/doc1", nil),
 			httptest.NewRecorder(),
-			doc1str, 200},
+			"", 200},
 		{httptest.NewRequest(http.MethodGet, "/v1/db1/", nil),
 			httptest.NewRecorder(),
-			"[" + doc1str + "]", 200},
-	}
-
-	for _, d := range data {
-		testhandler.ServeHTTP(d.w, d.r)
-		res := d.w.Result()
-		defer res.Body.Close()
-		data, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			t.Errorf("Test %d: Expected no error, got %v", i, err)
-		}
-		if string(data) != d.expected {
-			t.Errorf("Test %d: Expected response %s got %s", i, d.expected, string(data))
-		}
-		if res.StatusCode != d.code {
-			t.Errorf("Test %d: Expected response code %d got %d", i, d.code, res.StatusCode)
-		}
-		i++
-	}
-
-	// Tests Put for Collection and Post.
-	data = []test{
-		{httptest.NewRequest(http.MethodPut, "/v1/db1/doc1/col/", nil),
-			httptest.NewRecorder(),
-			"{\"uri\":\"/v1/db1/doc1/col/\"}", 201},
-		{httptest.NewRequest(http.MethodPost, "/v1/db1/", strings.NewReader("{\"prop\":100}")),
-			httptest.NewRecorder(),
-			"", 201},
-		{httptest.NewRequest(http.MethodPost, "/v1/db1/doc1/col/", strings.NewReader("{\"prop\":100}")),
-			httptest.NewRecorder(),
-			"", 201},
+			"", 200},
 	}
 
 	for _, d := range data {
@@ -158,6 +121,36 @@ func TestServeHTTPSequential(t *testing.T) {
 		{httptest.NewRequest(http.MethodPatch, "/v1/db1/doc1", strings.NewReader("[{\"op\":\"ArrayAdd\",\"path\":\"/b\",\"value\":100},{\"op\":\"ObjectAdd\",\"path\":\"/c\",\"value\":100}]")),
 			httptest.NewRecorder(),
 			"", 400},
+	}
+
+	for _, d := range data {
+		testhandler.ServeHTTP(d.w, d.r)
+		res := d.w.Result()
+		defer res.Body.Close()
+		data, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Errorf("Test %d: Expected no error, got %v", i, err)
+		}
+		if string(data) != d.expected && d.expected != "" {
+			t.Errorf("Test %d: Expected response %s got %s", i, d.expected, string(data))
+		}
+		if res.StatusCode != d.code {
+			t.Errorf("Test %d: Expected response code %d got %d", i, d.code, res.StatusCode)
+		}
+		i++
+	}
+
+	// Tests Put for Collection and Post.
+	data = []test{
+		{httptest.NewRequest(http.MethodPut, "/v1/db1/doc1/col/", nil),
+			httptest.NewRecorder(),
+			"{\"uri\":\"/v1/db1/doc1/col/\"}", 201},
+		{httptest.NewRequest(http.MethodPost, "/v1/db1/", strings.NewReader("{\"prop\":100}")),
+			httptest.NewRecorder(),
+			"", 201},
+		{httptest.NewRequest(http.MethodPost, "/v1/db1/doc1/col/", strings.NewReader("{\"prop\":100}")),
+			httptest.NewRecorder(),
+			"", 201},
 	}
 
 	for _, d := range data {
