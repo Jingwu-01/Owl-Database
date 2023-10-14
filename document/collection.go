@@ -13,7 +13,6 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/pathprocessor"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/relative"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -99,32 +98,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Puts a document into a collection
-func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, schema *jsonschema.Schema, name string) {
-	// Read body of requests
-	desc, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		slog.Error("Put document: error reading the document request body", "error", err)
-		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Read Body data
-	var docBody map[string]interface{}
-	err = json.Unmarshal(desc, &docBody)
-	if err != nil {
-		slog.Error("createReplaceDocument: error unmarshaling Put document request", "error", err)
-		http.Error(w, `"invalid Put document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Validate against schema
-	err = schema.Validate(docBody)
-	if err != nil {
-		slog.Error("Put document: document did not conform to schema", "error", err)
-		http.Error(w, `"document did not conform to schema"`, http.StatusBadRequest)
-		return
-	}
+func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc Document) {
 
 	// Marshal
 	jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
@@ -158,7 +132,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			}
 
 			// Modify metadata
-			currValue.Overwrite(docBody, name)
+			currValue.Overwrite(newDoc.GetRawBody(), newDoc.GetOriginalAuthor())
 
 			updateMSG, err := currValue.GetJSONBody()
 			if err != nil {
@@ -179,8 +153,6 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			return currValue, nil
 		} else {
 			// Create new document
-			newDoc := New(relative.GetRelativePathNonDB(r.URL.Path), name, docBody)
-
 			updateMSG, err := newDoc.GetJSONBody()
 			if err != nil {
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
@@ -345,33 +317,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 }
 
 // Posts a document in this collection
-func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema *jsonschema.Schema, name string) {
-	// note: a lot of shared logic with documentput, could refactor for shared method
-	// Read body of requests
-	desc, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		slog.Error("Post document: error reading the document request body", "error", err)
-		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Read Body data
-	var docBody map[string]interface{}
-	err = json.Unmarshal(desc, &docBody)
-	if err != nil {
-		slog.Error("createReplaceDocument: error unmarshaling Post document request", "error", err)
-		http.Error(w, `"invalid Post document format"`, http.StatusBadRequest)
-		return
-	}
-
-	// Validate against schema
-	err = schema.Validate(docBody)
-	if err != nil {
-		slog.Error("Post document: document did not conform to schema", "error", err)
-		http.Error(w, `"document did not conform to schema"`, http.StatusBadRequest)
-		return
-	}
+func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc Document) {
 
 	// Upsert for post
 	docUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
@@ -379,9 +325,6 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 			// Return error
 			return nil, errors.New("exists")
 		} else {
-			// Create new document
-			newDoc := New(key, name, docBody)
-
 			updateMSG, err := newDoc.GetJSONBody()
 			if err != nil {
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)

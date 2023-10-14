@@ -5,13 +5,16 @@
 package dbhandler
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/relative"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -156,10 +159,20 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 	switch resc {
 	case RESOURCE_DB:
 		// PUT document (in database)
-		coll.DocumentPut(w, r, newName, d.schema, username)
+		doc, err := d.createDocument(w, r, username)
+		if err != nil {
+			// handled in method
+			return
+		}
+		coll.DocumentPut(w, r, newName, doc)
 	case RESOURCE_COLL:
 		// PUT document (in collection)
-		coll.DocumentPut(w, r, newName, d.schema, username)
+		doc, err := d.createDocument(w, r, username)
+		if err != nil {
+			// handled in method
+			return
+		}
+		coll.DocumentPut(w, r, newName, doc)
 	case RESOURCE_DOC:
 		// PUT collection (in document)
 		doc.CollectionPut(w, r, newName)
@@ -214,7 +227,12 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string
 	case RESOURCE_DB:
 		d.DatabasePost(w, r, coll, username)
 	case RESOURCE_COLL:
-		coll.DocumentPost(w, r, d.schema, username)
+		doc, err := d.createDocument(w, r, username)
+		if err != nil {
+			// handled in method
+			return
+		}
+		coll.DocumentPost(w, r, doc)
 	default:
 		d.handlePathError(w, r, resc)
 	}
@@ -260,7 +278,12 @@ func (d *Dbhandler) DatabasePut(w http.ResponseWriter, r *http.Request, dbpath s
 // Specific handler for POST database
 func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll *document.Collection, name string) {
 	// Same behavior as collection for now
-	coll.DocumentPost(w, r, d.schema, name)
+	doc, err := d.createDocument(w, r, name)
+	if err != nil {
+		// handled in method
+		return
+	}
+	coll.DocumentPost(w, r, doc)
 }
 
 // Specific handler for DELETE database
@@ -495,4 +518,36 @@ func cutRequest(request string) (truncatedRequest string, resourceName string, r
 	}
 	slog.Info("Truncated resource path", "request", request, "resName", resName, "finalRes", finalRes)
 	return request, resName, finalRes
+}
+
+// Creates a document object to insert into a collection.
+func (d *Dbhandler) createDocument(w http.ResponseWriter, r *http.Request, name string) (document.Document, error) {
+	var zero document.Document
+	// Read body of requests
+	desc, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		slog.Error("Post document: error reading the document request body", "error", err)
+		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
+		return zero, err
+	}
+
+	// Read Body data
+	var docBody map[string]interface{}
+	err = json.Unmarshal(desc, &docBody)
+	if err != nil {
+		slog.Error("createReplaceDocument: error unmarshaling Post document request", "error", err)
+		http.Error(w, `"invalid Post document format"`, http.StatusBadRequest)
+		return zero, err
+	}
+
+	// Validate against schema
+	err = d.schema.Validate(docBody)
+	if err != nil {
+		slog.Error("Post document: document did not conform to schema", "error", err)
+		http.Error(w, `"document did not conform to schema"`, http.StatusBadRequest)
+		return zero, err
+	}
+
+	return document.New(relative.GetRelativePathNonDB(r.URL.Path), name, docBody), nil
 }

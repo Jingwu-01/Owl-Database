@@ -32,20 +32,20 @@ func newMeta(user string) meta {
 A docoutput is a struct which represents the data to
 be output when a user requests a given document.
 */
-type Docoutput struct {
+type docoutput struct {
 	Path string      `json:"path"`
 	Doc  interface{} `json:"doc"`
 	Meta meta        `json:"meta"`
 }
 
 // Create a new docoutput
-func newOutput(path, user string, docBody interface{}) Docoutput {
-	return Docoutput{path, docBody, newMeta(user)}
+func newOutput(path, user string, docBody interface{}) docoutput {
+	return docoutput{path, docBody, newMeta(user)}
 }
 
 // A document is a document plus a concurrent skip list of collections
 type Document struct {
-	output      Docoutput
+	output      docoutput
 	children    *CollectionHolder
 	subscribers []subscribe.Subscriber
 }
@@ -160,6 +160,11 @@ func (d *Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Sche
 // this document for conditional put.
 func (d *Document) GetLastModified() int64 {
 	return d.output.Meta.LastModifiedAt
+}
+
+// Gets the original author of this document
+func (d *Document) GetOriginalAuthor() string {
+	return d.output.Meta.CreatedBy
 }
 
 // Gets the JSON Object that this document stores.
