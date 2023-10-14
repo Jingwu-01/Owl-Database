@@ -47,7 +47,7 @@ func newOutput(path, user string, docBody interface{}) Docoutput {
 type Document struct {
 	output      Docoutput
 	children    *CollectionHolder
-	Subscribers []subscribe.Subscriber
+	subscribers []subscribe.Subscriber
 }
 
 // Creates a new document.
@@ -86,7 +86,7 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
-		d.Subscribers = append(d.Subscribers, subscriber)
+		d.subscribers = append(d.subscribers, subscriber)
 		w.Header().Set("Content-Type", "text/event-stream")
 		go subscriber.ServeHTTP(w, r)
 		subscriber.UpdateCh <- jsonDoc
@@ -177,4 +177,9 @@ func (d *Document) GetJSONBody() ([]byte, error) {
 // Gets the JSON Object that this document stores.
 func (d *Document) GetRawBody() interface{} {
 	return d.output
+}
+
+// Gets the subscribers to this document.
+func (d *Document) GetSubscribers() []subscribe.Subscriber {
+	return d.subscribers
 }

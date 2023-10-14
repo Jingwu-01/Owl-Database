@@ -30,7 +30,7 @@ which is sorted by document name.
 */
 type Collection struct {
 	documents   *skiplist.SkipList[string, *Document]
-	Subscribers []subscribe.Subscriber
+	subscribers []subscribe.Subscriber
 }
 
 // Creates a new collection.
@@ -67,7 +67,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
-		c.Subscribers = append(c.Subscribers, subscriber)
+		c.subscribers = append(c.subscribers, subscriber)
 		w.Header().Set("Content-Type", "text/event-stream")
 		go subscriber.ServeHTTP(w, r)
 
@@ -167,12 +167,12 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			}
 
 			// Notify doc subscribers
-			for _, sub := range currValue.Subscribers {
+			for _, sub := range currValue.GetSubscribers() {
 				sub.UpdateCh <- updateMSG
 			}
 
 			// Notify collection subscribers
-			for _, sub := range c.Subscribers {
+			for _, sub := range c.subscribers {
 				sub.UpdateCh <- updateMSG
 			}
 
@@ -188,7 +188,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			}
 
 			// Notify collection subscribers
-			for _, sub := range c.Subscribers {
+			for _, sub := range c.subscribers {
 				sub.UpdateCh <- updateMSG
 			}
 
@@ -235,12 +235,12 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 	}
 
 	// Notify doc subscribers
-	for _, sub := range doc.Subscribers {
+	for _, sub := range doc.GetSubscribers() {
 		sub.DeleteCh <- r.URL.Path
 	}
 
 	// Notify collection subscribers
-	for _, sub := range c.Subscribers {
+	for _, sub := range c.subscribers {
 		sub.DeleteCh <- r.URL.Path
 	}
 
@@ -306,12 +306,12 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 		}
 
 		// Notify doc subscribers
-		for _, sub := range doc.Subscribers {
+		for _, sub := range doc.GetSubscribers() {
 			sub.UpdateCh <- updateMSG
 		}
 
 		// Notify collection subscribers
-		for _, sub := range c.Subscribers {
+		for _, sub := range c.subscribers {
 			sub.UpdateCh <- updateMSG
 		}
 
@@ -389,7 +389,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 			}
 
 			// Notify collection subscribers
-			for _, sub := range c.Subscribers {
+			for _, sub := range c.subscribers {
 				sub.UpdateCh <- updateMSG
 			}
 
@@ -450,4 +450,9 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, schema
 // Find a document in this collection
 func (c *Collection) DocumentFind(resource string) (coll *Document, found bool) {
 	return c.documents.Find(resource)
+}
+
+// Get the subscribers to this collection.
+func (c *Collection) GetSubscribers() []subscribe.Subscriber {
+	return c.subscribers
 }

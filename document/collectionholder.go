@@ -76,7 +76,7 @@ func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Notify collection subscribers
-	for _, sub := range col.Subscribers {
+	for _, sub := range col.GetSubscribers() {
 		sub.DeleteCh <- r.URL.Path
 	}
 
