@@ -1,4 +1,4 @@
-package document
+package collectionholder
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
@@ -20,7 +21,7 @@ type CollectionHolder struct {
 }
 
 // Creates a new collection holder
-func NewHolder() CollectionHolder {
+func New() CollectionHolder {
 	newSL := skiplist.New[string, interfaces.ICollection](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return CollectionHolder{&newSL}
 }
@@ -33,7 +34,7 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 		if exists {
 			return nil, errors.New("database already exists")
 		} else {
-			newColl := NewCollection()
+			newColl := collection.New()
 			return &newColl, nil
 		}
 	}

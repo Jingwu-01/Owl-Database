@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
@@ -38,13 +39,13 @@ type docoutput struct {
 // A document is a document plus a concurrent skip list of collections
 type Document struct {
 	output      docoutput
-	children    *CollectionHolder
+	children    *collectionholder.CollectionHolder
 	subscribers []subscribe.Subscriber
 }
 
 // Creates a new document.
 func New(path, user string, docBody interface{}) Document {
-	newH := NewHolder()
+	newH := collectionholder.New()
 	return Document{newOutput(path, user, docBody), &newH, make([]subscribe.Subscriber, 0)}
 }
 
@@ -111,7 +112,7 @@ func (d *Document) Overwrite(docBody interface{}, name string) {
 	d.output = existingDocOutput
 
 	// Wipes the children of this document
-	newChildren := NewHolder()
+	newChildren := collectionholder.New()
 	d.children = &newChildren
 }
 

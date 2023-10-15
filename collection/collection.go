@@ -1,4 +1,4 @@
-package document
+package collection
 
 import (
 	"crypto/rand"
@@ -30,7 +30,7 @@ type Collection struct {
 }
 
 // Creates a new collection.
-func NewCollection() Collection {
+func New() Collection {
 	newSL := skiplist.New[string, interfaces.IDocument](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return Collection{&newSL, make([]subscribe.Subscriber, 0)}
 }

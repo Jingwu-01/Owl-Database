@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
@@ -46,14 +47,14 @@ type Authenticator interface {
 // base level databases as well as the schema and map of
 // usernames to authentication tokens.
 type Dbhandler struct {
-	databases     *document.CollectionHolder
+	databases     *collectionholder.CollectionHolder
 	schema        *jsonschema.Schema
 	authenticator Authenticator
 }
 
 // Creates a new DBHandler
 func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
-	newHolder := document.NewHolder()
+	newHolder := collectionholder.New()
 	retval := Dbhandler{&newHolder, schema, authenticator}
 
 	if testmode {
