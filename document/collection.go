@@ -132,7 +132,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			}
 
 			// Modify metadata
-			currValue.Overwrite(newDoc.GetRawBody(), newDoc.GetOriginalAuthor())
+			currValue.Overwrite(newDoc.GetDoc(), newDoc.GetOriginalAuthor())
 
 			updateMSG, err := currValue.GetJSONBody()
 			if err != nil {

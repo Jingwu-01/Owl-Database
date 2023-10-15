@@ -184,6 +184,11 @@ func (d *Document) GetRawBody() interface{} {
 	return d.output
 }
 
+// Gets the JSON Document that this document stores.
+func (d *Document) GetDoc() interface{} {
+	return d.output.Doc
+}
+
 // Gets the subscribers to this document.
 func (d *Document) GetSubscribers() []subscribe.Subscriber {
 	return d.subscribers
