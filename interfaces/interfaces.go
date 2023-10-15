@@ -25,4 +25,11 @@ type IDocument interface {
 }
 
 type ICollection interface {
+	CollectionGet(w http.ResponseWriter, r *http.Request)
+	DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc IDocument)
+	DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string)
+	DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string)
+	DocumentPost(w http.ResponseWriter, r *http.Request, newDoc IDocument)
+	DocumentFind(resource string) (IDocument, bool)
+	GetSubscribers() []subscribe.Subscriber
 }

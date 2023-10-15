@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
 )
@@ -15,12 +16,12 @@ A collectionholder is a concurrent skiplist that holds collections,
 which is sorted by collection name.
 */
 type CollectionHolder struct {
-	collections *skiplist.SkipList[string, *Collection]
+	collections *skiplist.SkipList[string, interfaces.ICollection]
 }
 
 // Creates a new collection holder
 func NewHolder() CollectionHolder {
-	newSL := skiplist.New[string, *Collection](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
+	newSL := skiplist.New[string, interfaces.ICollection](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return CollectionHolder{&newSL}
 }
 
@@ -28,7 +29,7 @@ func NewHolder() CollectionHolder {
 func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Add a new database to dbhandler if it is not already there; otherwise error
 	// Define the upsert method - only create a new collection
-	dbUpsert := func(key string, currValue *Collection, exists bool) (*Collection, error) {
+	dbUpsert := func(key string, currValue interfaces.ICollection, exists bool) (interfaces.ICollection, error) {
 		if exists {
 			return nil, errors.New("database already exists")
 		} else {
@@ -87,6 +88,6 @@ func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Reque
 }
 
 // Find a collection in this collection holder
-func (c *CollectionHolder) CollectionFind(resource string) (coll *Collection, found bool) {
+func (c *CollectionHolder) CollectionFind(resource string) (coll interfaces.ICollection, found bool) {
 	return c.collections.Find(resource)
 }

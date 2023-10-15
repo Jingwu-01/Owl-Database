@@ -165,7 +165,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 			// handled in method
 			return
 		}
-		coll.DocumentPut(w, r, newName, doc)
+		coll.DocumentPut(w, r, newName, &doc)
 	case RESOURCE_COLL:
 		// PUT document (in collection)
 		doc, err := d.createDocument(w, r, username)
@@ -173,7 +173,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 			// handled in method
 			return
 		}
-		coll.DocumentPut(w, r, newName, doc)
+		coll.DocumentPut(w, r, newName, &doc)
 	case RESOURCE_DOC:
 		// PUT collection (in document)
 		doc.CollectionPut(w, r, newName)
@@ -233,7 +233,7 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string
 			// handled in method
 			return
 		}
-		coll.DocumentPost(w, r, doc)
+		coll.DocumentPost(w, r, &doc)
 	default:
 		d.handlePathError(w, r, resc)
 	}
@@ -265,7 +265,7 @@ func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 // Specific handler for GET database
-func (d *Dbhandler) DatabaseGet(w http.ResponseWriter, r *http.Request, coll *document.Collection) {
+func (d *Dbhandler) DatabaseGet(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection) {
 	// Same behavior as collection for now
 	coll.CollectionGet(w, r)
 }
@@ -277,14 +277,14 @@ func (d *Dbhandler) DatabasePut(w http.ResponseWriter, r *http.Request, dbpath s
 }
 
 // Specific handler for POST database
-func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll *document.Collection, name string) {
+func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection, name string) {
 	// Same behavior as collection for now
 	doc, err := d.createDocument(w, r, name)
 	if err != nil {
 		// handled in method
 		return
 	}
-	coll.DocumentPost(w, r, doc)
+	coll.DocumentPost(w, r, &doc)
 }
 
 // Specific handler for DELETE database

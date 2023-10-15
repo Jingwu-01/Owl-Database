@@ -95,7 +95,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Puts a document into a collection
-func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc Document) {
+func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc interfaces.IDocument) {
 
 	// Marshal
 	jsonResponse, err := json.Marshal(structs.PutOutput{Uri: r.URL.Path})
@@ -161,7 +161,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				sub.UpdateCh <- updateMSG
 			}
 
-			return &newDoc, nil
+			return newDoc, nil
 		}
 	}
 
@@ -314,7 +314,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 }
 
 // Posts a document in this collection
-func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc Document) {
+func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
 
 	// Upsert for post
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
@@ -333,7 +333,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 				sub.UpdateCh <- updateMSG
 			}
 
-			return &newDoc, nil
+			return newDoc, nil
 		}
 	}
 
@@ -388,7 +388,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 }
 
 // Find a document in this collection
-func (c *Collection) DocumentFind(resource string) (coll interfaces.IDocument, found bool) {
+func (c *Collection) DocumentFind(resource string) (interfaces.IDocument, bool) {
 	return c.documents.Find(resource)
 }
 
