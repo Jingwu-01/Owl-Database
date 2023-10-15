@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/relative"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -301,7 +302,7 @@ the type of resource returned.
 
 On error, returns a resource error code indicating the type of error found.
 */
-func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *document.Document, int) {
+func (d *Dbhandler) getResourceFromPath(request string) (interfaces.ICollection, interfaces.IDocument, int) {
 	// Check version
 	path, found := strings.CutPrefix(request, "/v1/")
 	if !found {
@@ -338,8 +339,8 @@ func (d *Dbhandler) getResourceFromPath(request string) (*document.Collection, *
 	}
 
 	// Iterate over path
-	var lastColl *document.Collection = nil
-	var lastDoc *document.Document = nil
+	var lastColl interfaces.ICollection
+	var lastDoc interfaces.IDocument
 	for i, resource := range resources {
 		// Handle slash cases (blank)
 		if resource == "" {

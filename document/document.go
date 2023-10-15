@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -23,11 +25,6 @@ type meta struct {
 	LastModifiedAt int64  `json:"lastModifiedAt"`
 }
 
-// Create a new metadata
-func newMeta(user string) meta {
-	return meta{user, time.Now().UnixMilli(), user, time.Now().UnixMilli()}
-}
-
 /*
 A docoutput is a struct which represents the data to
 be output when a user requests a given document.
@@ -36,11 +33,6 @@ type docoutput struct {
 	Path string      `json:"path"`
 	Doc  interface{} `json:"doc"`
 	Meta meta        `json:"meta"`
-}
-
-// Create a new docoutput
-func newOutput(path, user string, docBody interface{}) docoutput {
-	return docoutput{path, docBody, newMeta(user)}
 }
 
 // A document is a document plus a concurrent skip list of collections
@@ -56,21 +48,14 @@ func New(path, user string, docBody interface{}) Document {
 	return Document{newOutput(path, user, docBody), &newH, make([]subscribe.Subscriber, 0)}
 }
 
-// Overwrite the body of a document upon recieving a put.
-func (d *Document) Overwrite(docBody interface{}, name string) {
-	existingDocOutput := d.output
-	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
-	existingDocOutput.Meta.LastModifiedBy = name
+// Create a new docoutput
+func newOutput(path, user string, docBody interface{}) docoutput {
+	return docoutput{path, docBody, newMeta(user)}
+}
 
-	// Modify document contents
-	existingDocOutput.Doc = docBody
-
-	// Modify it again in the doc
-	d.output = existingDocOutput
-
-	// Wipes the children of this document
-	newChildren := NewHolder()
-	d.children = &newChildren
+// Create a new metadata
+func newMeta(user string) meta {
+	return meta{user, time.Now().UnixMilli(), user, time.Now().UnixMilli()}
 }
 
 // Gets a document
@@ -109,23 +94,33 @@ func (d *Document) CollectionDelete(w http.ResponseWriter, r *http.Request, newN
 }
 
 // Finds a collection in this document
-func (d *Document) CollectionFind(resource string) (*Collection, bool) {
+func (d *Document) CollectionFind(resource string) (interfaces.ICollection, bool) {
 	return d.children.CollectionFind(resource)
 }
 
-// A PatchResponse stores the response from a Patch operation
-type PatchResponse struct {
-	Uri         string `json:"uri"`
-	PatchFailed bool   `json:"patchFailed"`
-	Message     string `json:"message"`
+// Overwrite the body of a document upon recieving a put.
+func (d *Document) Overwrite(docBody interface{}, name string) {
+	existingDocOutput := d.output
+	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
+	existingDocOutput.Meta.LastModifiedBy = name
+
+	// Modify document contents
+	existingDocOutput.Doc = docBody
+
+	// Modify it again in the doc
+	d.output = existingDocOutput
+
+	// Wipes the children of this document
+	newChildren := NewHolder()
+	d.children = &newChildren
 }
 
 // Applys a slice of patches to this document.
 // Returns a PatchResponse without the Uri field
 // set, expecting it to be set by caller.
-func (d *Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (PatchResponse, interface{}) {
+func (d *Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (structs.PatchResponse, interface{}) {
 	slog.Info("Applying patch to document", "path", d.output.Path)
-	var ret PatchResponse
+	var ret structs.PatchResponse
 	var err error
 
 	newdoc := d.output.Doc

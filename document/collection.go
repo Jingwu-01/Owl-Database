@@ -11,30 +11,27 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/pathprocessor"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
-
-// A putoutput stores the response to a put request.
-type putoutput struct {
-	Uri string `json:"uri"`
-}
 
 /*
 A collection is a concurrent skip list of documents,
 which is sorted by document name.
 */
 type Collection struct {
-	documents   *skiplist.SkipList[string, *Document]
+	documents   *skiplist.SkipList[string, interfaces.IDocument]
 	subscribers []subscribe.Subscriber
 }
 
 // Creates a new collection.
 func NewCollection() Collection {
-	newSL := skiplist.New[string, *Document](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
+	newSL := skiplist.New[string, interfaces.IDocument](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return Collection{&newSL, make([]subscribe.Subscriber, 0)}
 }
 
@@ -101,7 +98,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc Document) {
 
 	// Marshal
-	jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+	jsonResponse, err := json.Marshal(structs.PutOutput{Uri: r.URL.Path})
 	if err != nil {
 		// This should never happen
 		slog.Error("Put: error marshaling", "error", err)
@@ -123,7 +120,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 	}
 
 	// Upsert for document; update if found, otherwise create new
-	docUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
+	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
 			// Conditional put
 			matchOld := timeStamp == currValue.GetLastModified()
@@ -288,7 +285,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 		}
 
 		// Upsert to reinsert
-		patchUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
+		patchUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 			if exists {
 				// Delete Children of this document
 				return doc, nil
@@ -320,7 +317,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc Document) {
 
 	// Upsert for post
-	docUpsert := func(key string, currValue *Document, exists bool) (*Document, error) {
+	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
 			// Return error
 			return nil, errors.New("exists")
@@ -375,7 +372,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 	}
 
 	// Marshal
-	jsonResponse, err := json.Marshal(putoutput{r.URL.Path + path})
+	jsonResponse, err := json.Marshal(structs.PutOutput{Uri: r.URL.Path + path})
 	if err != nil {
 		// This should never happen
 		slog.Error("Post: error marshaling", "error", err)
@@ -391,7 +388,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 }
 
 // Find a document in this collection
-func (c *Collection) DocumentFind(resource string) (coll *Document, found bool) {
+func (c *Collection) DocumentFind(resource string) (coll interfaces.IDocument, found bool) {
 	return c.documents.Find(resource)
 }
 

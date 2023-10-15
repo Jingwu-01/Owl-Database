@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
 )
 
 /*
@@ -50,7 +51,7 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 	}
 
 	// Put success
-	jsonResponse, err := json.Marshal(putoutput{r.URL.Path})
+	jsonResponse, err := json.Marshal(structs.PutOutput{Uri: r.URL.Path})
 	if err != nil {
 		// This should never happen
 		slog.Error("PUT: marshal error", "error", err)
