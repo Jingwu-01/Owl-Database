@@ -85,8 +85,8 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Puts a new collection in this document.
-func (d *Document) CollectionPut(w http.ResponseWriter, r *http.Request, newName string) {
-	d.children.CollectionPut(w, r, newName)
+func (d *Document) CollectionPut(w http.ResponseWriter, r *http.Request, newName string, newColl interfaces.ICollection) {
+	d.children.CollectionPut(w, r, newName, newColl)
 }
 
 // Deletes a collection in this document.

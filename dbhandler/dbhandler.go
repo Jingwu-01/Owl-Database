@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
@@ -177,7 +178,8 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 		coll.DocumentPut(w, r, newName, &doc)
 	case RESOURCE_DOC:
 		// PUT collection (in document)
-		doc.CollectionPut(w, r, newName)
+		coll := collection.New()
+		doc.CollectionPut(w, r, newName, &coll)
 	default:
 		d.handlePathError(w, r, resc)
 	}
@@ -274,7 +276,8 @@ func (d *Dbhandler) DatabaseGet(w http.ResponseWriter, r *http.Request, coll int
 // Specific handler for PUT database
 func (d *Dbhandler) DatabasePut(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Same behavior as collection for now
-	d.databases.CollectionPut(w, r, dbpath)
+	coll := collection.New()
+	d.databases.CollectionPut(w, r, dbpath, &coll)
 }
 
 // Specific handler for POST database

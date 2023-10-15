@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
@@ -27,15 +26,14 @@ func New() CollectionHolder {
 }
 
 // Create a new collection inside this CollectionHolder
-func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string) {
+func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string, newColl interfaces.ICollection) {
 	// Add a new database to dbhandler if it is not already there; otherwise error
 	// Define the upsert method - only create a new collection
 	dbUpsert := func(key string, currValue interfaces.ICollection, exists bool) (interfaces.ICollection, error) {
 		if exists {
 			return nil, errors.New("database already exists")
 		} else {
-			newColl := collection.New()
-			return &newColl, nil
+			return newColl, nil
 		}
 	}
 

@@ -11,7 +11,7 @@ import (
 
 type IDocument interface {
 	DocumentGet(w http.ResponseWriter, r *http.Request)
-	CollectionPut(w http.ResponseWriter, r *http.Request, newName string)
+	CollectionPut(w http.ResponseWriter, r *http.Request, newName string, newColl ICollection)
 	CollectionDelete(w http.ResponseWriter, r *http.Request, newName string)
 	CollectionFind(resource string) (ICollection, bool)
 	Overwrite(docBody interface{}, name string)
