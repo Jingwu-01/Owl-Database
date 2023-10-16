@@ -1,3 +1,4 @@
+// Package interfaces contains interfaces of common data structures.
 package interfaces
 
 import (
@@ -9,6 +10,9 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
+// The interface of a document.
+//
+// A document represents a document in a database.
 type IDocument interface {
 	DocumentGet(w http.ResponseWriter, r *http.Request)
 	CollectionPut(w http.ResponseWriter, r *http.Request, newName string, newColl ICollection)
@@ -24,6 +28,9 @@ type IDocument interface {
 	GetSubscribers() []subscribe.Subscriber
 }
 
+// The interface of a collection.
+//
+// A collection represents a collection of documents in a database.
 type ICollection interface {
 	CollectionGet(w http.ResponseWriter, r *http.Request)
 	DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc IDocument)
@@ -34,6 +41,9 @@ type ICollection interface {
 	GetSubscribers() []subscribe.Subscriber
 }
 
+// The interface of a collection holder.
+//
+// A collection holder is used to store other collections.
 type ICollectionHolder interface {
 	CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string, newColl ICollection)
 	CollectionDelete(w http.ResponseWriter, r *http.Request, dbpath string)

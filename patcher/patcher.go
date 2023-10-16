@@ -27,7 +27,7 @@ type patchVisitor struct {
 }
 
 // Creates a new patch visitor struct for this patch.
-func new(patch Patch) (patchVisitor, error) {
+func New(patch Patch) (patchVisitor, error) {
 	vis := patchVisitor{}
 	vis.patch = patch
 	currPath, found := strings.CutPrefix(patch.Path, "/")
@@ -43,7 +43,7 @@ func new(patch Patch) (patchVisitor, error) {
 }
 
 func ApplyPatch(doc interface{}, patch Patch) (interface{}, error) {
-	patcher, err := new(patch)
+	patcher, err := New(patch)
 	if err != nil {
 		return nil, err
 	}

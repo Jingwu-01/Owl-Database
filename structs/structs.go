@@ -1,3 +1,5 @@
+// Package structs contains struct definitions for structs
+// not associated with a file (not created by New).
 package structs
 
 // A PatchResponse stores the response from a Patch operation

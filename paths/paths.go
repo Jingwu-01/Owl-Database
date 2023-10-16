@@ -1,6 +1,5 @@
 // Package paths contains static utility methods for processing
 // path name strings from requests.
-
 package paths
 
 import (
