@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -32,7 +33,8 @@ func TestServeHTTPSequential(t *testing.T) {
 	// Compile the schema
 	testschema, _ := jsonschema.Compile("testschema.json")
 
-	testhandler := New(false, testschema, skeletonAuthenticator{})
+	databases := collectionholder.New()
+	testhandler := New(false, &databases, testschema, skeletonAuthenticator{})
 
 	// Tests Put and Get on dbs and docs
 	data := []test{
