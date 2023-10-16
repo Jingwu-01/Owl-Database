@@ -33,3 +33,9 @@ type ICollection interface {
 	DocumentFind(resource string) (IDocument, bool)
 	GetSubscribers() []subscribe.Subscriber
 }
+
+type ICollectionHolder interface {
+	CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string, newColl ICollection)
+	CollectionDelete(w http.ResponseWriter, r *http.Request, dbpath string)
+	CollectionFind(resource string) (coll ICollection, found bool)
+}

@@ -10,10 +10,10 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/pathprocessor"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
@@ -39,7 +39,7 @@ func New() Collection {
 func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	// Get queries
 	queries := r.URL.Query()
-	interval := pathprocessor.GetInterval(queries.Get("interval"))
+	interval := getInterval(queries.Get("interval"))
 
 	// Build a list of document outputs
 	returnDocs := make([]interface{}, 0)
@@ -395,4 +395,40 @@ func (c *Collection) DocumentFind(resource string) (interfaces.IDocument, bool) 
 // Get the subscribers to this collection.
 func (c *Collection) GetSubscribers() []subscribe.Subscriber {
 	return c.subscribers
+}
+
+/*
+Convert a string representing string intervals into the elements inside the interval.
+
+The interval must be of the format [x,y] where x and y are the min and max of
+the interval. x and y may be optional where they are substituted for minima and maxima.
+*/
+func getInterval(intervalStr string) [2]string {
+	interval := [2]string{skiplist.STRING_MIN, skiplist.STRING_MAX}
+	// Must be in array form
+	if !(len(intervalStr) > 2 && intervalStr[0] == '[' && intervalStr[len(intervalStr)-1] == ']') {
+		slog.Info("GetInterval: Bad interval, non-array", "interval", intervalStr)
+		return interval
+	}
+
+	// Get rid of array surrounders and split
+	intervalStr = intervalStr[1 : len(intervalStr)-1]
+	procArr := strings.Split(intervalStr, ",")
+
+	if len(procArr) != 2 {
+		// Too many args
+		slog.Info("GetInterval: Bad interval, incorrect args", "interval", intervalStr)
+		return interval
+	}
+
+	// Success
+	interval[0] = procArr[0]
+	interval[1] = procArr[1]
+
+	if interval[1] == "" {
+		interval[1] = skiplist.STRING_MAX
+	}
+
+	slog.Info("GetInterval: Good interval", "arg[0]", interval[0], "arg[1]", interval[1])
+	return interval
 }

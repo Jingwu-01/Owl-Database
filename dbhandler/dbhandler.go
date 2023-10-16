@@ -10,32 +10,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/relative"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/paths"
 	"github.com/santhosh-tekuri/jsonschema/v5"
-)
-
-// Result code from getResourceFromPath()
-const (
-	RESOURCE_BLANK_PATHNAME = -103
-	RESOURCE_INTERNAL       = -102
-	RESOURCE_BAD_SLASH      = -101
-	RESOURCE_NO_VERSION     = -100
-	RESOURCE_NO_DB          = -RESOURCE_DB
-	RESOURCE_NO_COLL        = -RESOURCE_COLL
-	RESOURCE_NO_DOC         = -RESOURCE_DOC
-
-	RESOURCE_NULL  = 0
-	RESOURCE_DB    = 1
-	RESOURCE_COLL  = 2
-	RESOURCE_DOC   = 3
-	RESOURCE_DB_PD = 4 // specifically for put and delete db w/o slash
 )
 
 // An authenticator is something which can validate a login token as one supported
@@ -124,16 +106,16 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 
 	// Action fork for GET Database and GET Document
-	coll, doc, resc := d.getResourceFromPath(r.URL.Path)
+	coll, doc, resc := paths.GetResourceFromPath(r.URL.Path, d.databases)
 	switch resc {
-	case RESOURCE_DB:
+	case paths.RESOURCE_DB:
 		d.DatabaseGet(w, r, coll)
-	case RESOURCE_COLL:
+	case paths.RESOURCE_COLL:
 		coll.CollectionGet(w, r)
-	case RESOURCE_DOC:
+	case paths.RESOURCE_DOC:
 		doc.DocumentGet(w, r)
 	default:
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 	}
 }
 
@@ -143,24 +125,24 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 // On success, puts the specified resource at the specified path.
 func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string) {
 	// Obtain parent resource to put to
-	newRequest, newName, resc := cutRequest(r.URL.Path)
+	newRequest, newName, resc := paths.CutRequest(r.URL.Path)
 
 	// PUT database
-	if resc == RESOURCE_DB_PD {
+	if resc == paths.RESOURCE_DB_PD {
 		d.DatabasePut(w, r, newName)
 		return
-	} else if resc == RESOURCE_DB {
-		d.customError(w, r, "Bad syntax for PUT database (extra slash)", http.StatusBadRequest)
+	} else if resc == paths.RESOURCE_DB {
+		paths.CustomPathError(w, r, "Bad syntax for PUT database (extra slash)", http.StatusBadRequest)
 		return
 	} else if resc <= 0 {
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 		return
 	}
 
 	// Action fork for PUT Document and PUT Collection
-	coll, doc, resc := d.getResourceFromPath(newRequest)
+	coll, doc, resc := paths.GetResourceFromPath(newRequest, d.databases)
 	switch resc {
-	case RESOURCE_DB:
+	case paths.RESOURCE_DB:
 		// PUT document (in database)
 		doc, err := d.createDocument(w, r, username)
 		if err != nil {
@@ -168,7 +150,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 			return
 		}
 		coll.DocumentPut(w, r, newName, &doc)
-	case RESOURCE_COLL:
+	case paths.RESOURCE_COLL:
 		// PUT document (in collection)
 		doc, err := d.createDocument(w, r, username)
 		if err != nil {
@@ -176,12 +158,12 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 			return
 		}
 		coll.DocumentPut(w, r, newName, &doc)
-	case RESOURCE_DOC:
+	case paths.RESOURCE_DOC:
 		// PUT collection (in document)
 		coll := collection.New()
 		doc.CollectionPut(w, r, newName, &coll)
 	default:
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 	}
 }
 
@@ -191,31 +173,31 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 // On success, deletes the desired resource based on the specified path.
 func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	// Obtain parent resource to delete the element from
-	newRequest, newName, resc := cutRequest(r.URL.Path)
+	newRequest, newName, resc := paths.CutRequest(r.URL.Path)
 
 	// DELETE database
-	if resc == RESOURCE_DB_PD {
+	if resc == paths.RESOURCE_DB_PD {
 		d.DatabaseDelete(w, r, newName)
 		return
-	} else if resc < 0 || resc == RESOURCE_DB {
-		d.handlePathError(w, r, resc)
+	} else if resc < 0 || resc == paths.RESOURCE_DB {
+		paths.HandlePathError(w, r, resc)
 		return
 	}
 
 	// Action fork for DELETE Document and DELETE Collection
-	coll, doc, resc := d.getResourceFromPath(newRequest)
+	coll, doc, resc := paths.GetResourceFromPath(newRequest, d.databases)
 	switch resc {
-	case RESOURCE_DB:
+	case paths.RESOURCE_DB:
 		// DELETE document (from database)
 		coll.DocumentDelete(w, r, newName)
-	case RESOURCE_COLL:
+	case paths.RESOURCE_COLL:
 		// delete a document from a collection
 		coll.DocumentDelete(w, r, newName)
-	case RESOURCE_DOC:
+	case paths.RESOURCE_DOC:
 		// delete a collection from a document
 		doc.CollectionDelete(w, r, newName)
 	default:
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 	}
 }
 
@@ -226,11 +208,11 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 // to a database or collection.
 func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string) {
 	// Action fork for POST Database and POST Collection
-	coll, _, resc := d.getResourceFromPath(r.URL.Path)
+	coll, _, resc := paths.GetResourceFromPath(r.URL.Path, d.databases)
 	switch resc {
-	case RESOURCE_DB:
+	case paths.RESOURCE_DB:
 		d.DatabasePost(w, r, coll, username)
-	case RESOURCE_COLL:
+	case paths.RESOURCE_COLL:
 		doc, err := d.createDocument(w, r, username)
 		if err != nil {
 			// handled in method
@@ -238,7 +220,7 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string
 		}
 		coll.DocumentPost(w, r, &doc)
 	default:
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 	}
 }
 
@@ -248,22 +230,22 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string
 // On success, applies the desired patches.
 func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 	// Patch requires the parent resource
-	newRequest, newName, resc := cutRequest(r.URL.Path)
+	newRequest, newName, resc := paths.CutRequest(r.URL.Path)
 	if resc < 0 {
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 		return
 	}
 
 	// Action fork for PATCH document
 	// Should go to parent first
-	coll, _, resc := d.getResourceFromPath(newRequest)
+	coll, _, resc := paths.GetResourceFromPath(newRequest, d.databases)
 	switch resc {
-	case RESOURCE_DB:
+	case paths.RESOURCE_DB:
 		coll.DocumentPatch(w, r, newName, d.schema, name)
-	case RESOURCE_COLL:
+	case paths.RESOURCE_COLL:
 		coll.DocumentPatch(w, r, newName, d.schema, name)
 	default:
-		d.handlePathError(w, r, resc)
+		paths.HandlePathError(w, r, resc)
 	}
 }
 
@@ -297,234 +279,6 @@ func (d *Dbhandler) DatabaseDelete(w http.ResponseWriter, r *http.Request, name 
 	d.databases.CollectionDelete(w, r, name)
 }
 
-/*
-Obtains resource from the specified path.
-
-On success, returns a collection if the path leads to a collection or a database,
-or a document if the path leads to a document. Returns a result code indicating
-the type of resource returned.
-
-On error, returns a resource error code indicating the type of error found.
-*/
-func (d *Dbhandler) getResourceFromPath(request string) (interfaces.ICollection, interfaces.IDocument, int) {
-	// Check version
-	path, found := strings.CutPrefix(request, "/v1/")
-	if !found {
-		return nil, nil, RESOURCE_NO_VERSION
-	}
-
-	resources := strings.Split(path, "/")
-
-	// Identify resource type
-	finalRes := RESOURCE_NULL
-
-	// Handle errors
-	if len(resources) == 0 {
-		// /v1/
-		return nil, nil, RESOURCE_BAD_SLASH
-	} else if len(resources)%2 == 1 {
-		// Slash used for a document or end on a collection
-		// /v1/db/doc/ or /v1/db/doc/col
-		return nil, nil, RESOURCE_BAD_SLASH
-	}
-
-	// Identify the final resource
-	// If the last element ends with a slash, then it must be a collection
-	if len(resources) == 1 {
-		// /v1/db
-		finalRes = RESOURCE_DB_PD
-	} else if len(resources) == 2 && resources[1] == "" {
-		// /v1/db/
-		finalRes = RESOURCE_DB
-	} else if len(resources) > 2 && resources[len(resources)-1] == "" {
-		finalRes = RESOURCE_COLL
-	} else {
-		finalRes = RESOURCE_DOC
-	}
-
-	// Iterate over path
-	var lastColl interfaces.ICollection
-	var lastDoc interfaces.IDocument
-	for i, resource := range resources {
-		// Handle slash cases (blank)
-		if resource == "" {
-			if i != len(resources)-1 {
-				// Not last; invalid resource name
-				return nil, nil, RESOURCE_BLANK_PATHNAME
-			}
-
-			// Blank database put/delete
-			if i == 0 {
-				return nil, nil, RESOURCE_BAD_SLASH
-			}
-
-			// Error checking
-			if lastColl == nil {
-				slog.Error("GetResource: Returning NIL collection")
-				return nil, nil, RESOURCE_INTERNAL
-			}
-
-			// Return a database or collection
-			return lastColl, nil, finalRes
-		}
-
-		// Change behaviors depending on iteration
-		if i == 0 {
-			// Database
-			lastColl, found = d.databases.CollectionFind(resource)
-		} else if i%2 == 1 {
-			// Document
-			lastDoc, found = lastColl.DocumentFind(resource)
-		} else if i > 0 && i%2 == 0 {
-			// Collection
-			lastColl, found = lastDoc.CollectionFind(resource)
-		}
-
-		if !found {
-			slog.Info("User could not find resource", "index", i, "resource", resource, "resources", resources)
-			return nil, nil, -finalRes
-		}
-	}
-
-	// End without a slash - either a db_pd or document
-	if finalRes == RESOURCE_DB_PD {
-		// Error check
-		if lastColl == nil {
-			slog.Error("GetResource: Returning NIL database")
-			return nil, nil, RESOURCE_INTERNAL
-		}
-
-		return lastColl, nil, finalRes
-	} else if finalRes == RESOURCE_DOC {
-		// Error check
-		if lastDoc == nil {
-			slog.Error("GetResource: Returning NIL document")
-			return nil, nil, RESOURCE_INTERNAL
-		}
-
-		return nil, lastDoc, finalRes
-	} else {
-		return nil, nil, RESOURCE_INTERNAL
-	}
-
-}
-
-// Handle path errors returned from getResourceFromPath
-func (d *Dbhandler) handlePathError(w http.ResponseWriter, r *http.Request, code int) {
-	switch code {
-	case RESOURCE_BAD_SLASH:
-		slog.Info("Missing collection or database slash", "path", r.URL.Path)
-		msg := fmt.Sprintf("Malformed pathname (bad slashes)")
-		http.Error(w, msg, http.StatusBadRequest)
-	case RESOURCE_NO_VERSION:
-		slog.Info("User path did not include version", "path", r.URL.Path)
-		msg := fmt.Sprintf("Path missing version")
-		http.Error(w, msg, http.StatusBadRequest)
-	case RESOURCE_NO_DB:
-		slog.Info("User attempted to access non-extant database", "path", r.URL.Path)
-		msg := fmt.Sprintf("Could not find resource")
-		http.Error(w, msg, http.StatusNotFound)
-	case RESOURCE_NO_DOC:
-		slog.Info("User attempted to access non-extant document", "path", r.URL.Path)
-		msg := fmt.Sprintf("Could not find resource")
-		http.Error(w, msg, http.StatusNotFound)
-	case RESOURCE_NO_COLL:
-		slog.Info("User attempted to access non-extant collection", "path", r.URL.Path)
-		msg := fmt.Sprintf("Could not find resource")
-		http.Error(w, msg, http.StatusNotFound)
-	case RESOURCE_DB:
-		slog.Info("Invalid database resource for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("Method does not support databases")
-		http.Error(w, msg, http.StatusBadRequest)
-	case RESOURCE_COLL:
-		slog.Info("Invalid collection request for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("Method does not support collections")
-		http.Error(w, msg, http.StatusBadRequest)
-	case RESOURCE_DOC:
-		slog.Info("Invalid document request for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("Method does not support documents")
-		http.Error(w, msg, http.StatusBadRequest)
-	case RESOURCE_DB_PD:
-		slog.Info("Invalid database (no slash) request for request", "path", r.URL.Path)
-		msg := fmt.Sprintf("Method does not support databases or bad database syntax")
-		http.Error(w, msg, http.StatusBadRequest)
-	case RESOURCE_BLANK_PATHNAME:
-		slog.Info("Invalid path name (empty name for resource)", "path", r.URL.Path)
-		msg := fmt.Sprintf("Invalid path name (empty name for resource)")
-		http.Error(w, msg, http.StatusNotFound)
-	default:
-		slog.Info("Internal Error: unhandled error code", "path", r.URL.Path, "code", code)
-		msg := fmt.Sprintf("ERROR: handlePath bad error code: %d", code)
-		http.Error(w, msg, http.StatusInternalServerError)
-	}
-}
-
-// A generic error handler with a custom message and error code
-// Used instead of handlePathError()
-func (d *Dbhandler) customError(w http.ResponseWriter, r *http.Request, message string, code int) {
-	slog.Info(message, "path", r.URL.Path)
-	msg := fmt.Sprintf(message)
-	http.Error(w, msg, code)
-}
-
-/*
-Truncate a path's resource by one; that is, obtain the parent
-of the specified resource.
-
-On success, returns a new truncated path, the name of the resource
-that was truncated, and the type of resource that was truncated.
-
-On error, returns a resource error code.
-*/
-func cutRequest(request string) (truncatedRequest string, resourceName string, resourceType int) {
-	// Check version
-	path, found := strings.CutPrefix(request, "/v1/")
-	if !found {
-		return "", "", RESOURCE_NO_VERSION
-	}
-
-	resources := strings.Split(path, "/")
-
-	// Identify resource type
-	finalRes := RESOURCE_NULL
-
-	// Handle errors and databases
-	if len(resources) == 0 {
-		// /v1/
-		return "", "", RESOURCE_BAD_SLASH
-	} else if len(resources) == 1 {
-		// /v1/db
-		return "", resources[0], RESOURCE_DB_PD
-	} else if len(resources) == 2 && resources[1] == "" {
-		// /v1/db/
-		return "", resources[0], RESOURCE_DB
-	} else if len(resources)%2 == 1 {
-		// Slash used for a document or end on a collection
-		// /v1/db/doc/ or /v1/db/doc/col
-		return "", "", RESOURCE_BAD_SLASH
-	}
-
-	// Identify the final resource as a db or collection
-	// If the last element ends with a slash, then it must be a collection
-	li := strings.LastIndex(request, "/")
-	resName := request[li+1:]
-	if resources[len(resources)-1] == "" {
-		// Collection - truncate by two
-		// Goes to a document (do not include slash)
-		li2 := strings.LastIndex(request[:li], "/")
-		finalRes = RESOURCE_COLL
-		resName = request[li2+1 : li]
-		request = request[:li2]
-	} else {
-		// Document - truncate by one
-		// Goes to collection (include slash)
-		finalRes = RESOURCE_DOC
-		request = request[:li+1]
-	}
-	slog.Info("Truncated resource path", "request", request, "resName", resName, "finalRes", finalRes)
-	return request, resName, finalRes
-}
-
 // Creates a document object to insert into a collection.
 func (d *Dbhandler) createDocument(w http.ResponseWriter, r *http.Request, name string) (document.Document, error) {
 	var zero document.Document
@@ -554,5 +308,5 @@ func (d *Dbhandler) createDocument(w http.ResponseWriter, r *http.Request, name 
 		return zero, err
 	}
 
-	return document.New(relative.GetRelativePathNonDB(r.URL.Path), name, docBody), nil
+	return document.New(paths.GetRelativePathNonDB(r.URL.Path), name, docBody), nil
 }
