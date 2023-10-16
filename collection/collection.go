@@ -64,33 +64,33 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
 		c.subscribers = append(c.subscribers, subscriber)
-		go subscriber.ServeSubscriber(w, r)
-
-		for _, output := range returnDocs {
-			jsonBody, err := json.Marshal(output)
-			if err != nil {
-				// This should never happen
-				slog.Error("Get: error marshaling", "error", err)
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return
+		go func() {
+			for _, output := range returnDocs {
+				jsonBody, err := json.Marshal(output)
+				if err != nil {
+					// This should never happen
+					slog.Error("Get: error marshaling", "error", err)
+					http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+					return
+				}
+				subscriber.UpdateCh <- jsonBody
 			}
-			subscriber.UpdateCh <- jsonBody
+		}()
+		subscriber.ServeSubscriber(w, r)
+	} else {
+		// Convert to JSON and send
+		jsonDocs, err := json.Marshal(returnDocs)
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
 		}
-		return
-	}
 
-	// Convert to JSON and send
-	jsonDocs, err := json.Marshal(returnDocs)
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonDocs)
+		slog.Info("Col/DB GET: success")
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonDocs)
-	slog.Info("Col/DB GET: success")
 }
 
 // Puts a document into a collection
@@ -136,15 +136,17 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				return nil, err
 			}
 
-			// Notify doc subscribers
-			for _, sub := range currValue.GetSubscribers() {
-				sub.UpdateCh <- updateMSG
-			}
+			go func() {
+				// Notify doc subscribers
+				for _, sub := range currValue.GetSubscribers() {
+					sub.UpdateCh <- updateMSG
+				}
 
-			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
-			}
+				// Notify collection subscribers
+				for _, sub := range c.subscribers {
+					sub.UpdateCh <- updateMSG
+				}
+			}()
 
 			return currValue, nil
 		} else {
@@ -155,10 +157,12 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				return nil, errors.New("marshalling error")
 			}
 
-			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
-			}
+			go func() {
+				// Notify collection subscribers
+				for _, sub := range c.subscribers {
+					sub.UpdateCh <- updateMSG
+				}
+			}()
 
 			return newDoc, nil
 		}
@@ -202,15 +206,17 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 		return
 	}
 
-	// Notify doc subscribers
-	for _, sub := range doc.GetSubscribers() {
-		sub.DeleteCh <- r.URL.Path
-	}
+	go func() {
+		// Notify doc subscribers
+		for _, sub := range doc.GetSubscribers() {
+			sub.DeleteCh <- r.URL.Path
+		}
 
-	// Notify collection subscribers
-	for _, sub := range c.subscribers {
-		sub.DeleteCh <- r.URL.Path
-	}
+		// Notify collection subscribers
+		for _, sub := range c.subscribers {
+			sub.DeleteCh <- r.URL.Path
+		}
+	}()
 
 	slog.Info("Deleted Document", "path", r.URL.Path)
 	w.Header().Set("Location", r.URL.Path)
@@ -273,15 +279,17 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 			return
 		}
 
-		// Notify doc subscribers
-		for _, sub := range doc.GetSubscribers() {
-			sub.UpdateCh <- updateMSG
-		}
+		go func() {
+			// Notify doc subscribers
+			for _, sub := range doc.GetSubscribers() {
+				sub.UpdateCh <- updateMSG
+			}
 
-		// Notify collection subscribers
-		for _, sub := range c.subscribers {
-			sub.UpdateCh <- updateMSG
-		}
+			// Notify collection subscribers
+			for _, sub := range c.subscribers {
+				sub.UpdateCh <- updateMSG
+			}
+		}()
 
 		// Upsert to reinsert
 		patchUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
@@ -327,10 +335,12 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 				return nil, errors.New("marshalling error")
 			}
 
-			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
-			}
+			go func() {
+				// Notify collection subscribers
+				for _, sub := range c.subscribers {
+					sub.UpdateCh <- updateMSG
+				}
+			}()
 
 			return newDoc, nil
 		}

@@ -73,14 +73,15 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
 		d.subscribers = append(d.subscribers, subscriber)
-		go subscriber.ServeSubscriber(w, r)
-		subscriber.UpdateCh <- jsonDoc
-		return
+		go func() {
+			subscriber.UpdateCh <- jsonDoc
+		}()
+		subscriber.ServeSubscriber(w, r)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonDoc)
+		slog.Info("GET: success")
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonDoc)
-	slog.Info("GET: success")
 }
 
 // Puts a new collection in this document.
