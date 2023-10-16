@@ -78,7 +78,7 @@ func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Reque
 
 	// Notify collection subscribers
 	for _, sub := range col.GetSubscribers() {
-		sub.DeleteCh <- r.URL.Path
+		sub.Subscriber.DeleteCh <- r.URL.Path
 	}
 
 	slog.Info("Deleted Collection", "path", r.URL.Path)

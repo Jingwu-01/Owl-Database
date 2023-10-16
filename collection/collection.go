@@ -26,13 +26,13 @@ which is sorted by document name.
 */
 type Collection struct {
 	documents   *skiplist.SkipList[string, interfaces.IDocument]
-	subscribers []subscribe.Subscriber
+	subscribers []structs.CollSub
 }
 
 // Creates a new collection.
 func New() Collection {
 	newSL := skiplist.New[string, interfaces.IDocument](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
-	return Collection{&newSL, make([]subscribe.Subscriber, 0)}
+	return Collection{&newSL, make([]structs.CollSub, 0)}
 }
 
 // Gets a collection of documents
@@ -63,7 +63,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
-		c.subscribers = append(c.subscribers, subscriber)
+		c.subscribers = append(c.subscribers, structs.CollSub{Subscriber: subscriber, IntervalStart: interval[0], IntervalEnd: interval[1]})
 		go func() {
 			for _, output := range returnDocs {
 				jsonBody, err := json.Marshal(output)
@@ -144,7 +144,9 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 
 				// Notify collection subscribers
 				for _, sub := range c.subscribers {
-					sub.UpdateCh <- updateMSG
+					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
+						sub.Subscriber.UpdateCh <- updateMSG
+					}
 				}
 			}()
 
@@ -160,7 +162,9 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 			go func() {
 				// Notify collection subscribers
 				for _, sub := range c.subscribers {
-					sub.UpdateCh <- updateMSG
+					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
+						sub.Subscriber.UpdateCh <- updateMSG
+					}
 				}
 			}()
 
@@ -214,7 +218,9 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 
 		// Notify collection subscribers
 		for _, sub := range c.subscribers {
-			sub.DeleteCh <- r.URL.Path
+			if docpath >= sub.IntervalStart && docpath <= sub.IntervalEnd {
+				sub.Subscriber.DeleteCh <- r.URL.Path
+			}
 		}
 	}()
 
@@ -287,7 +293,9 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 
 			// Notify collection subscribers
 			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
+				if docpath >= sub.IntervalStart && docpath <= sub.IntervalEnd {
+					sub.Subscriber.UpdateCh <- updateMSG
+				}
 			}
 		}()
 
@@ -338,7 +346,9 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 			go func() {
 				// Notify collection subscribers
 				for _, sub := range c.subscribers {
-					sub.UpdateCh <- updateMSG
+					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
+						sub.Subscriber.UpdateCh <- updateMSG
+					}
 				}
 			}()
 
@@ -402,7 +412,7 @@ func (c *Collection) DocumentFind(resource string) (interfaces.IDocument, bool) 
 }
 
 // Get the subscribers to this collection.
-func (c *Collection) GetSubscribers() []subscribe.Subscriber {
+func (c *Collection) GetSubscribers() []structs.CollSub {
 	return c.subscribers
 }
 
