@@ -65,7 +65,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 		subscriber := subscribe.New()
 		c.subscribers = append(c.subscribers, subscriber)
 		w.Header().Set("Content-Type", "text/event-stream")
-		go subscriber.ServeHTTP(w, r)
+		go subscriber.ServeSubscriber(w, r)
 
 		for _, output := range returnDocs {
 			jsonBody, err := json.Marshal(output)
@@ -81,7 +81,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert to JSON and send
-	jsonToDo, err := json.Marshal(returnDocs)
+	jsonDocs, err := json.Marshal(returnDocs)
 	if err != nil {
 		// This should never happen
 		slog.Error("Get: error marshaling", "error", err)
@@ -90,7 +90,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonToDo)
+	w.Write(jsonDocs)
 	slog.Info("Col/DB GET: success")
 }
 

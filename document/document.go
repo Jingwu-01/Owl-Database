@@ -74,7 +74,7 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 		subscriber := subscribe.New()
 		d.subscribers = append(d.subscribers, subscriber)
 		w.Header().Set("Content-Type", "text/event-stream")
-		go subscriber.ServeHTTP(w, r)
+		go subscriber.ServeSubscriber(w, r)
 		subscriber.UpdateCh <- jsonDoc
 		return
 	}

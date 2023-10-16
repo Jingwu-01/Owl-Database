@@ -68,7 +68,7 @@ func (s Subscriber) sendComment(wf writeFlusher) {
 	wf.Flush()
 }
 
-func (s Subscriber) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s Subscriber) ServeSubscriber(w http.ResponseWriter, r *http.Request) {
 	// Convert ResponseWriter to a writeFlusher
 	wf, ok := w.(writeFlusher)
 	if !ok {
