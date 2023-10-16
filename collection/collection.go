@@ -64,7 +64,6 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
 		c.subscribers = append(c.subscribers, subscriber)
-		w.Header().Set("Content-Type", "text/event-stream")
 		go subscriber.ServeSubscriber(w, r)
 
 		for _, output := range returnDocs {

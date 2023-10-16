@@ -11,25 +11,32 @@ import (
 	"time"
 )
 
+// A write flusher is an interface to allow for
+// casting response writers to SSE-supporting
+// flushers.
 type writeFlusher interface {
 	http.ResponseWriter
 	http.Flusher
 }
 
+// A subscriber has channels for supporting sending
+// messages concurrently from documents and collections
+// to a subscriber.
 type Subscriber struct {
 	UpdateCh chan []byte
 	DeleteCh chan string
 }
 
+// New creates a new subscriber.
 func New() Subscriber {
 	return Subscriber{
-		UpdateCh: make(chan []byte, 1000),
-		DeleteCh: make(chan string, 1000),
+		UpdateCh: make(chan []byte),
+		DeleteCh: make(chan string),
 	}
 }
 
-// Send delete event when a document or collection is deleted
-func (s Subscriber) sendDelete(wf writeFlusher, path string) {
+// Send delete event when a document or collection is deleted.
+func writeDelete(path string) string {
 	// Create event
 	var event bytes.Buffer
 	now := time.Now()
@@ -37,13 +44,11 @@ func (s Subscriber) sendDelete(wf writeFlusher, path string) {
 	event.WriteString(fmt.Sprintf("event: delete\ndata: \"%s\"\nid: %d\n\n", path, millisecondsSinceEpoch))
 	slog.Info("Sending", "msg", event.String())
 
-	// Send event
-	wf.Write(event.Bytes())
-	wf.Flush()
+	return event.String()
 }
 
-// Send update event when a document or collection is updated
-func (s Subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
+// Send update event when a document or collection is updated.
+func writeUpdate(jsonObj []byte) string {
 	// Create event
 	var event bytes.Buffer
 	now := time.Now()
@@ -51,28 +56,28 @@ func (s Subscriber) sendUpdate(wf writeFlusher, jsonObj []byte) {
 	event.WriteString(fmt.Sprintf("event: update\ndata: %s\nid: %d\n\n", jsonObj, millisecondsSinceEpoch))
 	slog.Info("Sending", "msg", event.String())
 
-	// Send event
-	wf.Write(event.Bytes())
-	wf.Flush()
+	return event.String()
 }
 
-// Send comment event to keep the server running
-func (s Subscriber) sendComment(wf writeFlusher) {
+// Send comment event to keep the server running.
+func writeComment() string {
 	// Create event
 	var event bytes.Buffer
 	event.WriteString(": This is a comment event that keeps the server running\n\n")
 	slog.Info("Sending", "msg", event.String())
 
-	// Send event
-	wf.Write(event.Bytes())
-	wf.Flush()
+	return event.String()
 }
 
+// ServeSubscriber runs in a goroutine sending
+// events to a subscriber regarding the elements
+// of a database that they have subscribed to.
 func (s Subscriber) ServeSubscriber(w http.ResponseWriter, r *http.Request) {
 	// Convert ResponseWriter to a writeFlusher
 	wf, ok := w.(writeFlusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		slog.Info("Couldn't convert to write flusher")
 		return
 	}
 
@@ -89,6 +94,9 @@ func (s Subscriber) ServeSubscriber(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Sent headers")
 
+	wf.Write([]byte(writeDelete("hello")))
+	wf.Flush()
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -97,11 +105,14 @@ func (s Subscriber) ServeSubscriber(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-time.After(15 * time.Second):
 			// Send comments every 15 seconds to keep the connection
-			s.sendComment(wf)
+			wf.Write([]byte(writeComment()))
+			wf.Flush()
 		case jsonObj := <-s.UpdateCh:
-			s.sendUpdate(wf, jsonObj)
+			wf.Write([]byte(writeUpdate(jsonObj)))
+			wf.Flush()
 		case path := <-s.DeleteCh:
-			s.sendDelete(wf, path)
+			wf.Write([]byte(writeDelete(path)))
+			wf.Flush()
 		}
 	}
 }
