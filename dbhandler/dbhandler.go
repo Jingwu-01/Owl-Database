@@ -12,7 +12,6 @@ import (
 	"net/http"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
@@ -30,15 +29,14 @@ type Authenticator interface {
 // base level databases as well as the schema and map of
 // usernames to authentication tokens.
 type Dbhandler struct {
-	databases     *collectionholder.CollectionHolder
+	databases     interfaces.ICollectionHolder
 	schema        *jsonschema.Schema
 	authenticator Authenticator
 }
 
 // Creates a new DBHandler
-func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
-	newHolder := collectionholder.New()
-	retval := Dbhandler{&newHolder, schema, authenticator}
+func New(testmode bool, holder interfaces.ICollectionHolder, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
+	retval := Dbhandler{holder, schema, authenticator}
 
 	if testmode {
 		slog.Info("Test mode enabled")

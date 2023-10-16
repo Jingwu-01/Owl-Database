@@ -50,6 +50,7 @@ import (
 	"syscall"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/dbhandler"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/initialize"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -77,7 +78,8 @@ func main() {
 
 	// Create handlers
 	authenticator = authentication.New()
-	owlDB = dbhandler.New(testMode, schema, &authenticator)
+	databases := collectionholder.New()
+	owlDB = dbhandler.New(testMode, &databases, schema, &authenticator)
 
 	// Install handlers into mux
 	mux := http.NewServeMux()
