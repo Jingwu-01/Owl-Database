@@ -10,6 +10,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
+// A struct that carries data for running a test
 type test struct {
 	r        *http.Request
 	w        *httptest.ResponseRecorder
@@ -17,13 +18,16 @@ type test struct {
 	code     int
 }
 
-type skeletonAuthenticator struct {
-}
+// An empty struct to implement validate token.
+type skeletonAuthenticator struct{}
 
+// A simple implementation of validate token for testing.
 func (skeletonAuthenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string) {
 	return true, "charlie"
 }
 
+// We test all the methods sequentially, as we
+// thoroughly tested concurrency with the skip list.
 func TestServeHTTPSequential(t *testing.T) {
 	// Compile the schema
 	testschema, _ := jsonschema.Compile("testschema.json")
