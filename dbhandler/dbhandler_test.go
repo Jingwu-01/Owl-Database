@@ -34,7 +34,7 @@ func TestServeHTTPSequential(t *testing.T) {
 	testschema, _ := jsonschema.Compile("testschema.json")
 
 	databases := collectionholder.New()
-	testhandler := New(false, &databases, testschema, skeletonAuthenticator{})
+	testhandler := New(&databases, testschema, skeletonAuthenticator{})
 
 	// Tests Put and Get on dbs and docs
 	data := []test{

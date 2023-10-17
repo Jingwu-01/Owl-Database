@@ -15,13 +15,12 @@ import (
 // the input schema file into a jsonschema.Schema object.
 // Returns the port number, schema object, and the token
 // file's path.
-func Initialize() (int, *jsonschema.Schema, map[string]string, bool, error) {
+func Initialize() (int, *jsonschema.Schema, map[string]string, error) {
 	// Initialize flags
 	portFlag := flag.Int("p", 3318, "Port number")
 	schemaFlag := flag.String("s", "", "Schema file name")
 	tokenFlag := flag.String("t", "", "Token file name")
 	loggerFlag := flag.Int("l", 0, "Logger output level, -1 for debug, 1 for only errors")
-	testFlag := flag.Bool("i", false, "true to initialize a default database for testing")
 	flag.Parse()
 
 	var tokenmap map[string]string
@@ -29,7 +28,7 @@ func Initialize() (int, *jsonschema.Schema, map[string]string, bool, error) {
 	// Ensure we got a schema file
 	if *schemaFlag == "" {
 		slog.Error("Missing schema", "error", errors.New("missing schema"))
-		return 0, nil, tokenmap, false, errors.New("missing schema")
+		return 0, nil, tokenmap, errors.New("missing schema")
 	}
 
 	// Compile the schema
@@ -38,7 +37,7 @@ func Initialize() (int, *jsonschema.Schema, map[string]string, bool, error) {
 	// Check for errors.
 	if err != nil {
 		slog.Error("Invalid schema", "error", err)
-		return 0, nil, tokenmap, false, errors.New("invalid schema")
+		return 0, nil, tokenmap, errors.New("invalid schema")
 	}
 
 	// If the user inputs a token file.
@@ -47,14 +46,14 @@ func Initialize() (int, *jsonschema.Schema, map[string]string, bool, error) {
 		tokens, err := os.ReadFile(*tokenFlag)
 		if err != nil {
 			slog.Error("Error reading token file", "error", err)
-			return 0, nil, tokenmap, false, errors.New("token file error")
+			return 0, nil, tokenmap, errors.New("token file error")
 		}
 
 		// Unmarshal it.
 		err = json.Unmarshal(tokens, &tokenmap)
 		if err != nil {
 			slog.Error("Error marshalling token file", "error", err)
-			return 0, nil, tokenmap, false, errors.New("marshalling tokens error")
+			return 0, nil, tokenmap, errors.New("marshalling tokens error")
 		}
 	}
 
@@ -70,5 +69,5 @@ func Initialize() (int, *jsonschema.Schema, map[string]string, bool, error) {
 		slog.SetDefault(slog.New(h))
 	}
 
-	return *portFlag, schema, tokenmap, *testFlag, nil
+	return *portFlag, schema, tokenmap, nil
 }

@@ -12,20 +12,20 @@ import (
 )
 
 /*
-A collectionholder is a concurrent skiplist that holds collections,
-which is sorted by collection name.
+A collectionholder adds functionality to a concurrent skiplist
+that holds collections, which is sorted by collection name.
 */
 type CollectionHolder struct {
-	collections *skiplist.SkipList[string, interfaces.ICollection]
+	collections *skiplist.SkipList[string, interfaces.ICollection] // The internal skiplist representation.
 }
 
-// Creates a new collection holder
+// Creates a new collection holder.
 func New() CollectionHolder {
 	newSL := skiplist.New[string, interfaces.ICollection](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
 	return CollectionHolder{&newSL}
 }
 
-// Create a new collection inside this CollectionHolder
+// Create a new collection inside this CollectionHolder.
 func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string, newColl interfaces.ICollection) {
 	// Add a new database to dbhandler if it is not already there; otherwise error
 	// Define the upsert method - only create a new collection
@@ -64,7 +64,7 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 	w.Write(jsonResponse)
 }
 
-// Deletes a collection inside this CollectionHolder
+// Deletes a collection inside this CollectionHolder.
 func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Just request a delete on the specified element
 	col, deleted := c.collections.Remove(dbpath)
@@ -86,7 +86,7 @@ func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Find a collection in this collection holder
+// Find a collection in this collection holder.
 func (c *CollectionHolder) CollectionFind(resource string) (coll interfaces.ICollection, found bool) {
 	return c.collections.Find(resource)
 }

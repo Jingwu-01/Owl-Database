@@ -20,10 +20,10 @@ import (
 
 // A meta stores metadata about a document.
 type meta struct {
-	CreatedBy      string `json:"createdBy"`
-	CreatedAt      int64  `json:"createdAt"`
-	LastModifiedBy string `json:"lastModifiedBy"`
-	LastModifiedAt int64  `json:"lastModifiedAt"`
+	CreatedBy      string `json:"createdBy"`      // The user who created this JSON document.
+	CreatedAt      int64  `json:"createdAt"`      // The time this JSON document was created.
+	LastModifiedBy string `json:"lastModifiedBy"` // The last user who modified this JSON document.
+	LastModifiedAt int64  `json:"lastModifiedAt"` // The last time that this JSON document was modified.
 }
 
 /*
@@ -31,16 +31,17 @@ A docoutput is a struct which represents the data to
 be output when a user requests a given document.
 */
 type docoutput struct {
-	Path string      `json:"path"`
-	Doc  interface{} `json:"doc"`
-	Meta meta        `json:"meta"`
+	Path string      `json:"path"` // The relative path to this document.
+	Doc  interface{} `json:"doc"`  // The actual JSON document represented by this object.
+	Meta meta        `json:"meta"` // The metadata of this document.
 }
 
-// A document is a document plus a concurrent skip list of collections
+// A document is a document plus a concurrent
+// skip list of collections, and a slice of subscribers.
 type Document struct {
-	output      docoutput
-	children    *collectionholder.CollectionHolder
-	subscribers []subscribe.Subscriber
+	output      docoutput                          // The document held in this object with extra meta data.
+	children    *collectionholder.CollectionHolder // The set of collections this document holds.
+	subscribers []subscribe.Subscriber             // A slice of subscribers to this document.
 }
 
 // Creates a new document.
@@ -59,7 +60,7 @@ func newMeta(user string) meta {
 	return meta{user, time.Now().UnixMilli(), user, time.Now().UnixMilli()}
 }
 
-// Gets a document
+// Handles a GET request that has a path pointing to this document.
 func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	// Convert to JSON and send
 	jsonDoc, err := d.GetJSONBody()
@@ -84,22 +85,22 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Puts a new collection in this document.
+// Handles a PUT request that has a path pointing to this document.
 func (d *Document) CollectionPut(w http.ResponseWriter, r *http.Request, newName string, newColl interfaces.ICollection) {
 	d.children.CollectionPut(w, r, newName, newColl)
 }
 
-// Deletes a collection in this document.
+// Handles a DELETE on a collection in this document.
 func (d *Document) CollectionDelete(w http.ResponseWriter, r *http.Request, newName string) {
 	d.children.CollectionDelete(w, r, newName)
 }
 
-// Finds a collection in this document
+// Finds a collection in this document for other methods.
 func (d *Document) CollectionFind(resource string) (interfaces.ICollection, bool) {
 	return d.children.CollectionFind(resource)
 }
 
-// Overwrite the body of a document upon recieving a put.
+// Overwrite the body of a document upon recieving a put or patch.
 func (d *Document) Overwrite(docBody interface{}, name string) {
 	existingDocOutput := d.output
 	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
@@ -124,10 +125,13 @@ func (d *Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Sche
 	var ret structs.PatchResponse
 	var err error
 
+	// Iterate over slice of patches and apply them to the docbody each time.
 	newdoc := d.output.Doc
 	for i, patch := range patches {
 		newdoc, err = patcher.ApplyPatch(newdoc, patch)
+
 		slog.Debug("Patching", "patched doc", newdoc)
+
 		if err != nil {
 			slog.Info("Patch failed", "num", i)
 			str := fmt.Sprintf("Error applying patches: %s", err.Error())
@@ -137,6 +141,7 @@ func (d *Document) ApplyPatches(patches []patcher.Patch, schema *jsonschema.Sche
 		}
 	}
 
+	// Validates document against schema after patches have been applied.
 	err = schema.Validate(newdoc)
 	if err != nil {
 		slog.Error("Patch document: patched document did not conform to schema", "error", err)

@@ -22,11 +22,12 @@ import (
 
 /*
 A collection is a concurrent skip list of documents,
-which is sorted by document name.
+which is sorted by document name, and a set of subscribers
+to a subset of this collection.
 */
 type Collection struct {
-	documents   *skiplist.SkipList[string, interfaces.IDocument]
-	subscribers []structs.CollSub
+	documents   *skiplist.SkipList[string, interfaces.IDocument] // The set of documents held by this collection.
+	subscribers []structs.CollSub                                // The set of subscribers to this collection.
 }
 
 // Creates a new collection.
@@ -35,7 +36,7 @@ func New() Collection {
 	return Collection{&newSL, make([]structs.CollSub, 0)}
 }
 
-// Gets a collection of documents
+// Handles a GET request which pointed to this collection.
 func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	// Get queries
 	queries := r.URL.Query()
@@ -93,7 +94,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Puts a document into a collection
+// Handles a put request which points to this collection.
 func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc interfaces.IDocument) {
 
 	// Marshal
@@ -198,7 +199,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 	w.Write(jsonResponse)
 }
 
-// Deletes a document from this collection
+// Handles a DELETE request which points to a doc in this collection.
 func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Just request a delete on the specified element
 	doc, deleted := c.documents.Remove(docpath)
@@ -229,7 +230,7 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Patches a document in this collection
+// Handles a PATCH request to a document in this collection.
 func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
 	// Patch document case
 	// Retrieve document
@@ -328,7 +329,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	w.Write(jsonResponse)
 }
 
-// Posts a document in this collection
+// Handles a POST request to this collection.
 func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
 
 	// Upsert for post
@@ -406,12 +407,12 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 	w.Write(jsonResponse)
 }
 
-// Find a document in this collection
+// Finds a document in this collection for other methods.
 func (c *Collection) DocumentFind(resource string) (interfaces.IDocument, bool) {
 	return c.documents.Find(resource)
 }
 
-// Get the subscribers to this collection.
+// Gets the subscribers to this collection.
 func (c *Collection) GetSubscribers() []structs.CollSub {
 	return c.subscribers
 }

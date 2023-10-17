@@ -1,6 +1,6 @@
 // Package subscribe has structs and methods for
-// supporting subscription to documents and collections
-// as per the owlDB specification.
+// supporting subscription to documents and
+// collections as per the owlDB specification.
 package subscribe
 
 import (
@@ -23,8 +23,8 @@ type writeFlusher interface {
 // messages concurrently from documents and collections
 // to a subscriber.
 type Subscriber struct {
-	UpdateCh chan []byte
-	DeleteCh chan string
+	UpdateCh chan []byte // A channel to which we write updates.
+	DeleteCh chan string // A channel to which we write deletions.
 }
 
 // New creates a new subscriber.
@@ -35,7 +35,7 @@ func New() Subscriber {
 	}
 }
 
-// Send delete event when a document or collection is deleted.
+// Writes delete event when a document or collection is deleted.
 func writeDelete(path string) string {
 	// Create event
 	var event bytes.Buffer
@@ -47,7 +47,7 @@ func writeDelete(path string) string {
 	return event.String()
 }
 
-// Send update event when a document or collection is updated.
+// Writes update event when a document or collection is updated.
 func writeUpdate(jsonObj []byte) string {
 	// Create event
 	var event bytes.Buffer
@@ -59,7 +59,7 @@ func writeUpdate(jsonObj []byte) string {
 	return event.String()
 }
 
-// Send comment event to keep the server running.
+// Writes comment event to keep the server running.
 func writeComment() string {
 	// Create event
 	var event bytes.Buffer
@@ -93,9 +93,6 @@ func (s Subscriber) ServeSubscriber(w http.ResponseWriter, r *http.Request) {
 	wf.Flush()
 
 	slog.Info("Sent headers")
-
-	wf.Write([]byte(writeDelete("hello")))
-	wf.Flush()
 
 	for {
 		select {
