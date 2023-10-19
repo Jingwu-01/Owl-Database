@@ -37,7 +37,7 @@ func New() Collection {
 }
 
 // Handles a GET request which pointed to this collection.
-func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
+func (c *Collection) GetCollection(w http.ResponseWriter, r *http.Request) {
 	// Get queries
 	queries := r.URL.Query()
 	interval := getInterval(queries.Get("interval"))
@@ -95,7 +95,7 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles a put request which points to this collection.
-func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc interfaces.IDocument) {
+func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path string, newDoc interfaces.IDocument) {
 
 	// Marshal
 	jsonResponse, err := json.Marshal(structs.PutOutput{Uri: r.URL.Path})
@@ -200,7 +200,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 }
 
 // Handles a DELETE request which points to a doc in this collection.
-func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
+func (c *Collection) DeleteDocument(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Just request a delete on the specified element
 	doc, deleted := c.documents.Remove(docpath)
 
@@ -231,7 +231,7 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 }
 
 // Handles a PATCH request to a document in this collection.
-func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
+func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
 	// Patch document case
 	// Retrieve document
 	doc, ok := c.documents.Find(docpath)
@@ -330,7 +330,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 }
 
 // Handles a POST request to this collection.
-func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
+func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
 	// Upsert for post
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
@@ -407,7 +407,7 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 }
 
 // Finds a document in this collection for other methods.
-func (c *Collection) DocumentFind(resource string) (interfaces.IDocument, bool) {
+func (c *Collection) FindDocument(resource string) (interfaces.IDocument, bool) {
 	return c.documents.Find(resource)
 }
 

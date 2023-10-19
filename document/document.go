@@ -61,7 +61,7 @@ func newMeta(user string) meta {
 }
 
 // Handles a GET request that has a path pointing to this document.
-func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
+func (d *Document) GetDocument(w http.ResponseWriter, r *http.Request) {
 	// Convert to JSON and send
 	jsonDoc, err := d.GetJSONBody()
 	if err != nil {
@@ -86,18 +86,18 @@ func (d *Document) DocumentGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles a PUT request that has a path pointing to this document.
-func (d *Document) CollectionPut(w http.ResponseWriter, r *http.Request, newName string, newColl interfaces.ICollection) {
-	d.children.CollectionPut(w, r, newName, newColl)
+func (d *Document) PutCollection(w http.ResponseWriter, r *http.Request, newName string, newColl interfaces.ICollection) {
+	d.children.PutCollection(w, r, newName, newColl)
 }
 
 // Handles a DELETE on a collection in this document.
-func (d *Document) CollectionDelete(w http.ResponseWriter, r *http.Request, newName string) {
-	d.children.CollectionDelete(w, r, newName)
+func (d *Document) DeleteCollection(w http.ResponseWriter, r *http.Request, newName string) {
+	d.children.DeleteCollection(w, r, newName)
 }
 
 // Finds a collection in this document for other methods.
-func (d *Document) CollectionFind(resource string) (interfaces.ICollection, bool) {
-	return d.children.CollectionFind(resource)
+func (d *Document) GetCollection(resource string) (interfaces.ICollection, bool) {
+	return d.children.FindCollection(resource)
 }
 
 // Overwrite the body of a document upon recieving a put or patch.

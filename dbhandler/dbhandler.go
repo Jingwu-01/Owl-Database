@@ -87,11 +87,11 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 	coll, doc, resc := paths.GetResourceFromPath(r.URL.Path, d.databases)
 	switch resc {
 	case paths.RESOURCE_DB:
-		d.databaseGet(w, r, coll)
+		d.getCollection(w, r, coll)
 	case paths.RESOURCE_COLL:
-		coll.CollectionGet(w, r)
+		coll.GetCollection(w, r)
 	case paths.RESOURCE_DOC:
-		doc.DocumentGet(w, r)
+		doc.GetDocument(w, r)
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
@@ -107,7 +107,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 
 	// PUT database
 	if resc == paths.RESOURCE_DB_PD {
-		d.databasePut(w, r, newName)
+		d.putDatabase(w, r, newName)
 		return
 	} else if resc == paths.RESOURCE_DB {
 		paths.CustomPathError(w, r, "Bad syntax for PUT database (extra slash)", http.StatusBadRequest)
@@ -127,7 +127,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 			// handled in method
 			return
 		}
-		coll.DocumentPut(w, r, newName, &doc)
+		coll.PutDocument(w, r, newName, &doc)
 	case paths.RESOURCE_COLL:
 		// PUT document (in collection)
 		doc, err := d.createDocument(w, r, username)
@@ -135,11 +135,11 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 			// handled in method
 			return
 		}
-		coll.DocumentPut(w, r, newName, &doc)
+		coll.PutDocument(w, r, newName, &doc)
 	case paths.RESOURCE_DOC:
 		// PUT collection (in document)
 		coll := collection.New()
-		doc.CollectionPut(w, r, newName, &coll)
+		doc.PutCollection(w, r, newName, &coll)
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
@@ -155,7 +155,7 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 
 	// DELETE database
 	if resc == paths.RESOURCE_DB_PD {
-		d.databaseDelete(w, r, newName)
+		d.deleteDatabase(w, r, newName)
 		return
 	} else if resc < 0 || resc == paths.RESOURCE_DB {
 		paths.HandlePathError(w, r, resc)
@@ -167,13 +167,13 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 	switch resc {
 	case paths.RESOURCE_DB:
 		// DELETE document (from database)
-		coll.DocumentDelete(w, r, newName)
+		coll.DeleteDocument(w, r, newName)
 	case paths.RESOURCE_COLL:
 		// delete a document from a collection
-		coll.DocumentDelete(w, r, newName)
+		coll.DeleteDocument(w, r, newName)
 	case paths.RESOURCE_DOC:
 		// delete a collection from a document
-		doc.CollectionDelete(w, r, newName)
+		doc.DeleteCollection(w, r, newName)
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
@@ -189,14 +189,14 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string
 	coll, _, resc := paths.GetResourceFromPath(r.URL.Path, d.databases)
 	switch resc {
 	case paths.RESOURCE_DB:
-		d.databasePost(w, r, coll, username)
+		d.postDocument(w, r, coll, username)
 	case paths.RESOURCE_COLL:
 		doc, err := d.createDocument(w, r, username)
 		if err != nil {
 			// handled in method
 			return
 		}
-		coll.DocumentPost(w, r, &doc)
+		coll.PostDocument(w, r, &doc)
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
@@ -219,42 +219,42 @@ func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 	coll, _, resc := paths.GetResourceFromPath(newRequest, d.databases)
 	switch resc {
 	case paths.RESOURCE_DB:
-		coll.DocumentPatch(w, r, newName, d.schema, name)
+		coll.PatchDocument(w, r, newName, d.schema, name)
 	case paths.RESOURCE_COLL:
-		coll.DocumentPatch(w, r, newName, d.schema, name)
+		coll.PatchDocument(w, r, newName, d.schema, name)
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
 }
 
-// Specific handler for GET database
-func (d *Dbhandler) databaseGet(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection) {
+// Specific handler for GET database (get a collection of documents from a database)
+func (d *Dbhandler) getCollection(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection) {
 	// Same behavior as collection for now
-	coll.CollectionGet(w, r)
+	coll.GetCollection(w, r)
 }
 
-// Specific handler for PUT database
-func (d *Dbhandler) databasePut(w http.ResponseWriter, r *http.Request, dbpath string) {
+// Specific handler for PUT database (create a new database)
+func (d *Dbhandler) putDatabase(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Same behavior as collection for now
 	coll := collection.New()
-	d.databases.CollectionPut(w, r, dbpath, &coll)
+	d.databases.PutCollection(w, r, dbpath, &coll)
 }
 
-// Specific handler for POST database
-func (d *Dbhandler) databasePost(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection, name string) {
+// Specific handler for POST database (post a document to a database)
+func (d *Dbhandler) postDocument(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection, name string) {
 	// Same behavior as collection for now
 	doc, err := d.createDocument(w, r, name)
 	if err != nil {
 		// handled in method
 		return
 	}
-	coll.DocumentPost(w, r, &doc)
+	coll.PostDocument(w, r, &doc)
 }
 
-// Specific handler for DELETE database
-func (d *Dbhandler) databaseDelete(w http.ResponseWriter, r *http.Request, name string) {
+// Specific handler for DELETE database (delete a top level database)
+func (d *Dbhandler) deleteDatabase(w http.ResponseWriter, r *http.Request, name string) {
 	// Same behavior as collection for now
-	d.databases.CollectionDelete(w, r, name)
+	d.databases.DeleteCollection(w, r, name)
 }
 
 // Creates a document object to insert into a collection.

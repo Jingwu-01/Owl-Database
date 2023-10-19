@@ -26,7 +26,7 @@ func New() CollectionHolder {
 }
 
 // Create a new collection inside this CollectionHolder.
-func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request, dbpath string, newColl interfaces.ICollection) {
+func (c *CollectionHolder) PutCollection(w http.ResponseWriter, r *http.Request, dbpath string, newColl interfaces.ICollection) {
 	// Add a new database to dbhandler if it is not already there; otherwise error
 	// Define the upsert method - only create a new collection
 	dbUpsert := func(key string, currValue interfaces.ICollection, exists bool) (interfaces.ICollection, error) {
@@ -65,7 +65,7 @@ func (c *CollectionHolder) CollectionPut(w http.ResponseWriter, r *http.Request,
 }
 
 // Deletes a collection inside this CollectionHolder.
-func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Request, dbpath string) {
+func (c *CollectionHolder) DeleteCollection(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Just request a delete on the specified element
 	col, deleted := c.collections.Remove(dbpath)
 
@@ -87,6 +87,6 @@ func (c *CollectionHolder) CollectionDelete(w http.ResponseWriter, r *http.Reque
 }
 
 // Find a collection in this collection holder.
-func (c *CollectionHolder) CollectionFind(resource string) (coll interfaces.ICollection, found bool) {
+func (c *CollectionHolder) FindCollection(resource string) (coll interfaces.ICollection, found bool) {
 	return c.collections.Find(resource)
 }
