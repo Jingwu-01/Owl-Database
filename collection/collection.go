@@ -315,7 +315,6 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 
 // Posts a document in this collection
 func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
-
 	// Upsert for post
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
