@@ -22,20 +22,21 @@ import (
 
 /*
 A collection is a concurrent skip list of documents,
-which is sorted by document name.
+which is sorted by document name, and a set of subscribers
+to a subset of this collection.
 */
 type Collection struct {
-	documents   *skiplist.SkipList[string, interfaces.IDocument]
-	subscribers []subscribe.Subscriber
+	documents   *skiplist.SkipList[string, interfaces.IDocument] // The set of documents held by this collection.
+	subscribers []structs.CollSub                                // The set of subscribers to this collection.
 }
 
 // Creates a new collection.
 func New() Collection {
 	newSL := skiplist.New[string, interfaces.IDocument](skiplist.STRING_MIN, skiplist.STRING_MAX, skiplist.DEFAULT_LEVEL)
-	return Collection{&newSL, make([]subscribe.Subscriber, 0)}
+	return Collection{&newSL, make([]structs.CollSub, 0)}
 }
 
-// Gets a collection of documents
+// Handles a GET request which pointed to this collection.
 func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	// Get queries
 	queries := r.URL.Query()
@@ -63,38 +64,37 @@ func (c *Collection) CollectionGet(w http.ResponseWriter, r *http.Request) {
 	mode := r.URL.Query().Get("mode")
 	if mode == "subscribe" {
 		subscriber := subscribe.New()
-		c.subscribers = append(c.subscribers, subscriber)
-		w.Header().Set("Content-Type", "text/event-stream")
-		go subscriber.ServeHTTP(w, r)
-
-		for _, output := range returnDocs {
-			jsonBody, err := json.Marshal(output)
-			if err != nil {
-				// This should never happen
-				slog.Error("Get: error marshaling", "error", err)
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-				return
+		c.subscribers = append(c.subscribers, structs.CollSub{Subscriber: subscriber, IntervalStart: interval[0], IntervalEnd: interval[1]})
+		go func() {
+			for _, output := range returnDocs {
+				jsonBody, err := json.Marshal(output)
+				if err != nil {
+					// This should never happen
+					slog.Error("Get: error marshaling", "error", err)
+					http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+					return
+				}
+				subscriber.UpdateCh <- jsonBody
 			}
-			subscriber.UpdateCh <- jsonBody
+		}()
+		subscriber.ServeSubscriber(w, r)
+	} else {
+		// Convert to JSON and send
+		jsonDocs, err := json.Marshal(returnDocs)
+		if err != nil {
+			// This should never happen
+			slog.Error("Get: error marshaling", "error", err)
+			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			return
 		}
-		return
-	}
 
-	// Convert to JSON and send
-	jsonToDo, err := json.Marshal(returnDocs)
-	if err != nil {
-		// This should never happen
-		slog.Error("Get: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonDocs)
+		slog.Info("Col/DB GET: success")
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonToDo)
-	slog.Info("Col/DB GET: success")
 }
 
-// Puts a document into a collection
+// Handles a put request which points to this collection.
 func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path string, newDoc interfaces.IDocument) {
 
 	// Marshal
@@ -137,15 +137,19 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				return nil, err
 			}
 
-			// Notify doc subscribers
-			for _, sub := range currValue.GetSubscribers() {
-				sub.UpdateCh <- updateMSG
-			}
+			go func() {
+				// Notify doc subscribers
+				for _, sub := range currValue.GetSubscribers() {
+					sub.UpdateCh <- updateMSG
+				}
 
-			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
-			}
+				// Notify collection subscribers
+				for _, sub := range c.subscribers {
+					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
+						sub.Subscriber.UpdateCh <- updateMSG
+					}
+				}
+			}()
 
 			return currValue, nil
 		} else {
@@ -156,10 +160,14 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 				return nil, errors.New("marshalling error")
 			}
 
-			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
-			}
+			go func() {
+				// Notify collection subscribers
+				for _, sub := range c.subscribers {
+					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
+						sub.Subscriber.UpdateCh <- updateMSG
+					}
+				}
+			}()
 
 			return newDoc, nil
 		}
@@ -191,7 +199,7 @@ func (c *Collection) DocumentPut(w http.ResponseWriter, r *http.Request, path st
 	w.Write(jsonResponse)
 }
 
-// Deletes a document from this collection
+// Handles a DELETE request which points to a doc in this collection.
 func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docpath string) {
 	// Just request a delete on the specified element
 	doc, deleted := c.documents.Remove(docpath)
@@ -203,22 +211,26 @@ func (c *Collection) DocumentDelete(w http.ResponseWriter, r *http.Request, docp
 		return
 	}
 
-	// Notify doc subscribers
-	for _, sub := range doc.GetSubscribers() {
-		sub.DeleteCh <- r.URL.Path
-	}
+	go func() {
+		// Notify doc subscribers
+		for _, sub := range doc.GetSubscribers() {
+			sub.DeleteCh <- r.URL.Path
+		}
 
-	// Notify collection subscribers
-	for _, sub := range c.subscribers {
-		sub.DeleteCh <- r.URL.Path
-	}
+		// Notify collection subscribers
+		for _, sub := range c.subscribers {
+			if docpath >= sub.IntervalStart && docpath <= sub.IntervalEnd {
+				sub.Subscriber.DeleteCh <- r.URL.Path
+			}
+		}
+	}()
 
 	slog.Info("Deleted Document", "path", r.URL.Path)
 	w.Header().Set("Location", r.URL.Path)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Patches a document in this collection
+// Handles a PATCH request to a document in this collection.
 func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string) {
 	// Patch document case
 	// Retrieve document
@@ -274,15 +286,19 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 			return
 		}
 
-		// Notify doc subscribers
-		for _, sub := range doc.GetSubscribers() {
-			sub.UpdateCh <- updateMSG
-		}
+		go func() {
+			// Notify doc subscribers
+			for _, sub := range doc.GetSubscribers() {
+				sub.UpdateCh <- updateMSG
+			}
 
-		// Notify collection subscribers
-		for _, sub := range c.subscribers {
-			sub.UpdateCh <- updateMSG
-		}
+			// Notify collection subscribers
+			for _, sub := range c.subscribers {
+				if docpath >= sub.IntervalStart && docpath <= sub.IntervalEnd {
+					sub.Subscriber.UpdateCh <- updateMSG
+				}
+			}
+		}()
 
 		// Upsert to reinsert
 		patchUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
@@ -313,7 +329,7 @@ func (c *Collection) DocumentPatch(w http.ResponseWriter, r *http.Request, docpa
 	w.Write(jsonResponse)
 }
 
-// Posts a document in this collection
+// Handles a POST request to this collection.
 func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
 	// Upsert for post
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
@@ -327,10 +343,14 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 				return nil, errors.New("marshalling error")
 			}
 
-			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				sub.UpdateCh <- updateMSG
-			}
+			go func() {
+				// Notify collection subscribers
+				for _, sub := range c.subscribers {
+					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
+						sub.Subscriber.UpdateCh <- updateMSG
+					}
+				}
+			}()
 
 			return newDoc, nil
 		}
@@ -386,13 +406,13 @@ func (c *Collection) DocumentPost(w http.ResponseWriter, r *http.Request, newDoc
 	w.Write(jsonResponse)
 }
 
-// Find a document in this collection
+// Finds a document in this collection for other methods.
 func (c *Collection) DocumentFind(resource string) (interfaces.IDocument, bool) {
 	return c.documents.Find(resource)
 }
 
-// Get the subscribers to this collection.
-func (c *Collection) GetSubscribers() []subscribe.Subscriber {
+// Gets the subscribers to this collection.
+func (c *Collection) GetSubscribers() []structs.CollSub {
 	return c.subscribers
 }
 

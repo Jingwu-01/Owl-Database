@@ -15,19 +15,19 @@ import (
 
 // A struct that represents a patch.
 type Patch struct {
-	Op    string
-	Path  string
-	Value interface{}
+	Op    string      // The desired operation of the patch.
+	Path  string      // A JSON pointer to the target of the patch.
+	Value interface{} // The JSON object to be added or removed by the patch.
 }
 
 // A struct that visits a document and applies a patch to it.
 type patchVisitor struct {
-	patch    Patch
-	currPath string
+	patch    Patch  // The patch to be added to the visited document.
+	currPath string // The remaining part of the path to traverse.
 }
 
 // Creates a new patch visitor struct for this patch.
-func New(patch Patch) (patchVisitor, error) {
+func new(patch Patch) (patchVisitor, error) {
 	vis := patchVisitor{}
 	vis.patch = patch
 	currPath, found := strings.CutPrefix(patch.Path, "/")
@@ -42,8 +42,10 @@ func New(patch Patch) (patchVisitor, error) {
 	return vis, nil
 }
 
+// Applies the input patch to the input document, and returns
+// the patched document, or an error, if one occurs.
 func ApplyPatch(doc interface{}, patch Patch) (interface{}, error) {
-	patcher, err := New(patch)
+	patcher, err := new(patch)
 	if err != nil {
 		return nil, err
 	}

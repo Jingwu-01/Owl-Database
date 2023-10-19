@@ -38,7 +38,7 @@ type ICollection interface {
 	DocumentPatch(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string)
 	DocumentPost(w http.ResponseWriter, r *http.Request, newDoc IDocument)
 	DocumentFind(resource string) (IDocument, bool)
-	GetSubscribers() []subscribe.Subscriber
+	GetSubscribers() []structs.CollSub
 }
 
 // The interface of a collection holder.

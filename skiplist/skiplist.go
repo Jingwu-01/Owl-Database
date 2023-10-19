@@ -13,25 +13,25 @@ import (
 
 // A struct representing a node in a skip list.
 type node[K cmp.Ordered, V any] struct {
-	sync.Mutex
-	key         K
-	value       V
-	topLevel    int
-	marked      atomic.Bool
-	fullyLinked atomic.Bool
-	next        []atomic.Pointer[node[K, V]]
+	sync.Mutex                               // Locking embedded in the nodes for concurrency.
+	key         K                            // The key of this skiplist entry.
+	value       V                            // The value fo this skiplist entry.
+	topLevel    int                          // The top level at which this entry is inserted.
+	marked      atomic.Bool                  // A marked bit saying whether this entry has been removed.
+	fullyLinked atomic.Bool                  // A fully linked bit saying whether this entry has been fully added yet.
+	next        []atomic.Pointer[node[K, V]] // A list of atomic pointers to the next node at a given level - size topLevel.
 }
 
 // A struct representing a skiplist.
 type SkipList[K cmp.Ordered, V any] struct {
-	head     *node[K, V]
-	totalOps *atomic.Int32
+	head     *node[K, V]   // The head of the skiplist.
+	totalOps *atomic.Int32 // An atomic counter updated when things are added or removed - used by query.
 }
 
 // A struct encapsulating the key, value returns from a query.
 type Pair[K cmp.Ordered, V any] struct {
-	Key   K
-	Value V
+	Key   K // The key of this list entry.
+	Value V // The value of this list entry.
 }
 
 // For strings, the min and max values

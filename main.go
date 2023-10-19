@@ -30,11 +30,8 @@ The flags are:
 	-l
 		An integer, logger output level, 1 for errors only, -1 for debug
 		as well as all other info.
-	-i
-		A bool flag - include to have a test set of databases and documents
-		added to the server.
 
-When a client connects to the OwlDB server, they will be given a unique
+When a client logs into the OwlDB server, they will be given a unique
 token which they will use on all future logins. They will have the power
 to then access all of the databases, documents, and collections on the
 server, as well as adding new ones, and subscribing to changes.
@@ -50,6 +47,7 @@ import (
 	"syscall"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/dbhandler"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/initialize"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -61,14 +59,13 @@ func main() {
 	var port int
 	var schema *jsonschema.Schema
 	var tokenmap map[string]string
-	var testMode bool
 	var err error
 	var server http.Server
 	var owlDB dbhandler.Dbhandler
 	var authenticator authentication.Authenticator
 
 	// Initialize the user input variables.
-	port, schema, tokenmap, testMode, err = initialize.Initialize()
+	port, schema, tokenmap, err = initialize.Initialize()
 
 	// Printing was handled in initialize.
 	if err != nil {
@@ -77,7 +74,8 @@ func main() {
 
 	// Create handlers
 	authenticator = authentication.New()
-	owlDB = dbhandler.New(testMode, schema, &authenticator)
+	databases := collectionholder.New()
+	owlDB = dbhandler.New(&databases, schema, &authenticator)
 
 	// Install handlers into mux
 	mux := http.NewServeMux()

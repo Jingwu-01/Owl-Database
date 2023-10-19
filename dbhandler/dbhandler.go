@@ -12,7 +12,6 @@ import (
 	"net/http"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
@@ -20,8 +19,8 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
-// An authenticator is something which can validate a login token as one supported
-// by a dbhandler or not.
+// An authenticator is something which can validate a login token
+// as a valid user of a dbhandler or not.
 type Authenticator interface {
 	ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string)
 }
@@ -30,35 +29,14 @@ type Authenticator interface {
 // base level databases as well as the schema and map of
 // usernames to authentication tokens.
 type Dbhandler struct {
-	databases     *collectionholder.CollectionHolder
-	schema        *jsonschema.Schema
-	authenticator Authenticator
+	databases     interfaces.ICollectionHolder // The set of databases held by this handler.
+	schema        *jsonschema.Schema           // The schema documents in this database must conform to.
+	authenticator Authenticator                // An authenticator for user validation.
 }
 
 // Creates a new DBHandler
-func New(testmode bool, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
-	newHolder := collectionholder.New()
-	retval := Dbhandler{&newHolder, schema, authenticator}
-
-	if testmode {
-		slog.Info("Test mode enabled")
-
-		// The current test cases will have
-		// Need to be updated
-		/*
-			retval.databases.Store("db1", collection.New())
-			retval.databases.Store("db2", collection.New())
-			db1, _ := retval.databases.Load("db1")
-			var collection = db1.(collection.Collection)
-			docbody := make(map[string]interface{})
-			docbody["test"] = 1
-			docbody["jerry"] = "jingwu"
-			doc := document.New("/doc", "charlie", docbody)
-			collection.Documents.Store("doc", doc)
-		*/
-	}
-
-	return retval
+func New(holder interfaces.ICollectionHolder, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
+	return Dbhandler{holder, schema, authenticator}
 }
 
 // The server implements the "handler" interface, it will recieve
@@ -109,7 +87,7 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 	coll, doc, resc := paths.GetResourceFromPath(r.URL.Path, d.databases)
 	switch resc {
 	case paths.RESOURCE_DB:
-		d.DatabaseGet(w, r, coll)
+		d.databaseGet(w, r, coll)
 	case paths.RESOURCE_COLL:
 		coll.CollectionGet(w, r)
 	case paths.RESOURCE_DOC:
@@ -129,7 +107,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 
 	// PUT database
 	if resc == paths.RESOURCE_DB_PD {
-		d.DatabasePut(w, r, newName)
+		d.databasePut(w, r, newName)
 		return
 	} else if resc == paths.RESOURCE_DB {
 		paths.CustomPathError(w, r, "Bad syntax for PUT database (extra slash)", http.StatusBadRequest)
@@ -177,7 +155,7 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 
 	// DELETE database
 	if resc == paths.RESOURCE_DB_PD {
-		d.DatabaseDelete(w, r, newName)
+		d.databaseDelete(w, r, newName)
 		return
 	} else if resc < 0 || resc == paths.RESOURCE_DB {
 		paths.HandlePathError(w, r, resc)
@@ -211,7 +189,7 @@ func (d *Dbhandler) post(w http.ResponseWriter, r *http.Request, username string
 	coll, _, resc := paths.GetResourceFromPath(r.URL.Path, d.databases)
 	switch resc {
 	case paths.RESOURCE_DB:
-		d.DatabasePost(w, r, coll, username)
+		d.databasePost(w, r, coll, username)
 	case paths.RESOURCE_COLL:
 		doc, err := d.createDocument(w, r, username)
 		if err != nil {
@@ -250,20 +228,20 @@ func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 // Specific handler for GET database
-func (d *Dbhandler) DatabaseGet(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection) {
+func (d *Dbhandler) databaseGet(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection) {
 	// Same behavior as collection for now
 	coll.CollectionGet(w, r)
 }
 
 // Specific handler for PUT database
-func (d *Dbhandler) DatabasePut(w http.ResponseWriter, r *http.Request, dbpath string) {
+func (d *Dbhandler) databasePut(w http.ResponseWriter, r *http.Request, dbpath string) {
 	// Same behavior as collection for now
 	coll := collection.New()
 	d.databases.CollectionPut(w, r, dbpath, &coll)
 }
 
 // Specific handler for POST database
-func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection, name string) {
+func (d *Dbhandler) databasePost(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection, name string) {
 	// Same behavior as collection for now
 	doc, err := d.createDocument(w, r, name)
 	if err != nil {
@@ -274,7 +252,7 @@ func (d *Dbhandler) DatabasePost(w http.ResponseWriter, r *http.Request, coll in
 }
 
 // Specific handler for DELETE database
-func (d *Dbhandler) DatabaseDelete(w http.ResponseWriter, r *http.Request, name string) {
+func (d *Dbhandler) databaseDelete(w http.ResponseWriter, r *http.Request, name string) {
 	// Same behavior as collection for now
 	d.databases.CollectionDelete(w, r, name)
 }
