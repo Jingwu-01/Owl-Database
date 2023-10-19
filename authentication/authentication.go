@@ -80,26 +80,21 @@ func generateToken() (string, error) {
 }
 
 // ValidateToken tells if a token in a request is valid. Returns
-// true if so, else writes an error to the input response writer.
+// true and the corresponding username if so, else writes an error to the input response writer.
 func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string) {
 	// Check if the token is missing
 	authValue := r.Header.Get("Authorization")
 	parts := strings.Split(authValue, " ")
 	slog.Info("Validate request", "full string", authValue)
 
-	if len(parts) != 2 || parts[0] != "Bearer" {
+	if len(parts) != 2 || parts[0] != "Bearer" || parts[1] == "" {
 		// Missing or malformed bearer token
 		slog.Info("ValidateToken: missing or malformed bearer token", "token", authValue)
 		http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
 		return false, ""
 	}
-	token := parts[1]
 
-	if token == "" {
-		slog.Info("ValidateToken: token is missing", "token", token)
-		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
-		return false, ""
-	}
+	token := parts[1]
 
 	// Validate token and expiration in sessions map
 	userInfo, ok := a.sessions.Load(token)
@@ -107,7 +102,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 		if !userInfo.(sessionInfo).expiresAt.After(time.Now()) {
 			// token has expired
 			slog.Info("ValidateToken: token has expired")
-			http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+			http.Error(w, "Expired bearer token", http.StatusUnauthorized)
 			return false, ""
 		} else {
 			// token is valid
@@ -116,7 +111,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 	} else {
 		// token does not exist
 		slog.Info("ValidateToken: token does not exist")
-		http.Error(w, "Missing or invalid bearer token", http.StatusUnauthorized)
+		http.Error(w, "Invalid bearer token", http.StatusUnauthorized)
 		return false, ""
 	}
 }
@@ -132,18 +127,18 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		slog.Error("Login: error reading the request body", "error", err)
-		http.Error(w, "invalid login format", http.StatusBadRequest)
+		http.Error(w, "error reading the login request body", http.StatusBadRequest)
 		return
 	}
 	var userInfo map[string]string
 	err = json.Unmarshal(desc, &userInfo)
 	if err != nil {
 		slog.Error("Login: error unmarshaling request", "error", err)
-		http.Error(w, `"invalid login format"`, http.StatusBadRequest)
+		http.Error(w, `"error unmarshaling login request"`, http.StatusBadRequest)
 		return
 	}
 
-	// Store username and token in a session map with expiration time
+	// Store username and token in a sessions map with expiration time
 	username := userInfo["username"]
 	if username == "" {
 		slog.Info("Login: no username in request body")
@@ -159,15 +154,15 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add the user to the sessions map and its authorization expires one hour later
 	a.sessions.Store(token, sessionInfo{username, time.Now().Add(1 * time.Hour)})
 
 	// Return the token to the user
 	jsonToken, err := json.Marshal(map[string]string{"token": token})
-	// jsonToken, err := json.Marshal(sessions)
 	if err != nil {
 		// This should never happen
 		slog.Error("Login: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		http.Error(w, `"error marshaling token"`, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -186,19 +181,11 @@ func (a *Authenticator) logout(w http.ResponseWriter, r *http.Request) {
 		// Remove the corresponding userInfo from the sessions map
 		authValue := r.Header.Get("Authorization")
 		parts := strings.Split(authValue, " ")
-
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			// Missing or malformed bearer token
-			slog.Info("Logout: missing or malformed bearer token", "token", authValue)
-			http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
-			return
-		}
 		token := parts[1]
 
 		a.sessions.Delete(token)
 		w.WriteHeader(http.StatusNoContent)
 
 		slog.Info("Logout: user is successfully removed", "token", token)
-		return
 	}
 }
