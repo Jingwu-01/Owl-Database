@@ -49,6 +49,7 @@ import (
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/authentication"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/dbhandler"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/initialize"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -81,6 +82,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", &owlDB)
 	mux.Handle("/auth", &authenticator)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		errorMessage.ErrorResponse(w, "Missing /v1/ or /auth in request", 400)
+	})
 
 	// Install users into authenticator
 	authenticator.InstallUsers(tokenmap)

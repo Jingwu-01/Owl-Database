@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 )
 
@@ -209,47 +210,47 @@ func HandlePathError(w http.ResponseWriter, r *http.Request, code int) {
 	case ERROR_BAD_SLASH:
 		slog.Info("Invalid path: malformed slash.", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path: malformed slash in pathname.")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	case ERROR_NO_VERSION:
 		slog.Info("Invalid path: did not include version", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path: did not include version.")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	case ERROR_NO_DB:
 		slog.Info("User attempted to access non-extant database", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path: could not find resource.")
-		http.Error(w, msg, http.StatusNotFound)
+		errorMessage.ErrorResponse(w, msg, http.StatusNotFound)
 	case ERROR_NO_DOC:
 		slog.Info("User attempted to access non-extant document", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path: could not find resource.")
-		http.Error(w, msg, http.StatusNotFound)
+		errorMessage.ErrorResponse(w, msg, http.StatusNotFound)
 	case ERROR_NO_COLL:
 		slog.Info("User attempted to access non-extant collection", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path: could not find resource.")
-		http.Error(w, msg, http.StatusNotFound)
+		errorMessage.ErrorResponse(w, msg, http.StatusNotFound)
 	case RESOURCE_DB:
 		slog.Info("Invalid database resource for request", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid request: request does not support databases")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	case RESOURCE_COLL:
 		slog.Info("Invalid collection request for request", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid request: request does not support collections")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	case RESOURCE_DOC:
 		slog.Info("Invalid document request for request", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid request: request does not support documents")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	case RESOURCE_DB_PD:
 		slog.Info("Invalid database (no slash) request for request", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid request: invalid syntax for database or does not support database.")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	case ERROR_BLANK_PATHNAME:
 		slog.Info("Invalid path name (empty name for resource)", "path", r.URL.Path)
 		msg := fmt.Sprintf("Invalid path: empty name for resource")
-		http.Error(w, msg, http.StatusNotFound)
+		errorMessage.ErrorResponse(w, msg, http.StatusNotFound)
 	default:
 		slog.Info("Internal Error: unhandled error code", "path", r.URL.Path, "code", code)
 		msg := fmt.Sprintf("ERROR: handlePath unhandled error code: %d", code)
-		http.Error(w, msg, http.StatusInternalServerError)
+		errorMessage.ErrorResponse(w, msg, http.StatusInternalServerError)
 	}
 }
 

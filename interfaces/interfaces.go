@@ -18,7 +18,7 @@ type IDocument interface {
 	PutCollection(w http.ResponseWriter, r *http.Request, newName string, newColl ICollection)
 	DeleteCollection(w http.ResponseWriter, r *http.Request, newName string)
 	GetCollection(resource string) (ICollection, bool)
-	Overwrite(docBody interface{}, name string)
+	OverwriteBody(docBody interface{}, name string)
 	ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (structs.PatchResponse, interface{})
 	GetLastModified() int64
 	GetOriginalAuthor() string
@@ -48,4 +48,10 @@ type ICollectionHolder interface {
 	PutCollection(w http.ResponseWriter, r *http.Request, dbpath string, newColl ICollection)
 	DeleteCollection(w http.ResponseWriter, r *http.Request, dbpath string)
 	FindCollection(resource string) (coll ICollection, found bool)
+}
+
+// An authenticator is something which can validate a login token
+// as a valid user of a dbhandler or not.
+type Authenticator interface {
+	ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string)
 }
