@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
@@ -51,7 +52,7 @@ func (c *Collection) GetDocuments(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// TODO: type of error?
 		slog.Info("Collection could not retrieve query in time")
-		http.Error(w, `"Timeout while querying collection"`, http.StatusRequestTimeout)
+		errorMessage.ErrorResponse(w, "Timeout while querying collection", http.StatusRequestTimeout)
 		return
 	}
 
@@ -71,7 +72,7 @@ func (c *Collection) GetDocuments(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					// This should never happen
 					slog.Error("Get: error marshaling", "error", err)
-					http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+					errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 					return
 				}
 				subscriber.UpdateCh <- jsonBody
@@ -84,7 +85,7 @@ func (c *Collection) GetDocuments(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			// This should never happen
 			slog.Error("Get: error marshaling", "error", err)
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 
@@ -102,8 +103,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 	if err != nil {
 		// This should never happen
 		slog.Error("Put: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
+		errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 	}
 
 	// Conditional Put on timestamp
@@ -113,8 +113,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 		val, err := strconv.Atoi(timeStampStr)
 		if err != nil {
 			slog.Error("Put: Bad timestamp", "error", err)
-			http.Error(w, "Bad timestamp", http.StatusBadRequest)
-			return
+			errorMessage.ErrorResponse(w, "Bad timestamp", http.StatusBadRequest)
 		}
 		timeStamp = int64(val)
 	}
@@ -140,7 +139,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 
 			updateMSG, err := json.Marshal(currValue.GetRawBody())
 			if err != nil {
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 				return nil, err
 			}
 
@@ -160,7 +159,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 			// Create new document
 			updateMSG, err := json.Marshal(newDoc.GetRawBody())
 			if err != nil {
-				http.Error(w, `"PutDocument: error marshalling"`, http.StatusInternalServerError)
+				errorMessage.ErrorResponse(w, "PutDocument: error marshalling", http.StatusInternalServerError)
 				return nil, errors.New("marshalling error")
 			}
 
@@ -179,13 +178,13 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 		case "badtimestamp":
 			// TODO: error code for timestamp
 			slog.Error(err.Error())
-			http.Error(w, "PUT: bad timestamp", http.StatusNotFound)
+			errorMessage.ErrorResponse(w, "PUT: bad timestamp", http.StatusNotFound)
 		case "badoverwrite":
 			slog.Error(err.Error())
-			http.Error(w, "PUT: overwrite not supported", http.StatusBadRequest)
+			errorMessage.ErrorResponse(w, "PUT: overwrite not supported", http.StatusBadRequest)
 		default:
 			slog.Error(err.Error())
-			http.Error(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
+			errorMessage.ErrorResponse(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
 		}
 	}
 
@@ -240,7 +239,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 	if !ok {
 		slog.Info("User attempted to patch non-extant document", "doc", docpath)
 		msg := fmt.Sprintf("Document, %s, does not exist", docpath)
-		http.Error(w, msg, http.StatusNotFound)
+		errorMessage.ErrorResponse(w, msg, http.StatusNotFound)
 		return
 	}
 
@@ -251,7 +250,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 	defer r.Body.Close()
 	if err != nil {
 		slog.Error("Patch document: error reading the patch request body", "error", err)
-		http.Error(w, `"invalid request body"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -259,7 +258,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 	err = json.Unmarshal(body, &patches)
 	if err != nil {
 		slog.Error("Patch document: error unmarshaling patch document request", "error", err)
-		http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "invalid patch document format", http.StatusBadRequest)
 		return
 	}
 
@@ -267,7 +266,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 	patcher, canPatch := interface{}(doc).(interfaces.Patchable)
 	if !canPatch {
 		slog.Error("Patch document: document can't patch", "error", err)
-		http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "invalid patch document format", http.StatusBadRequest)
 		return
 	}
 
@@ -280,7 +279,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 	if err != nil {
 		// This should never happen
 		slog.Error("Patch: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -290,7 +289,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 
 		updateMSG, err := json.Marshal(doc.GetRawBody())
 		if err != nil {
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 
@@ -320,7 +319,7 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 		if !updated {
 			// This shouldn't happen
 			slog.Error("Patch: ", "error", err.Error())
-			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+			errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 		slog.Info("Patched a document", "path", r.URL.Path)
@@ -344,7 +343,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 		} else {
 			updateMSG, err := json.Marshal(newDoc.GetRawBody())
 			if err != nil {
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 				return nil, errors.New("marshalling error")
 			}
 
@@ -366,7 +365,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 		_, err := rand.Read(token)
 		if err != nil {
 			slog.Error("Post document: could not generate random name", "error", err)
-			http.Error(w, `"Could not generate random name`, http.StatusInternalServerError)
+			errorMessage.ErrorResponse(w, "Could not generate random name", http.StatusInternalServerError)
 			return
 		}
 
@@ -378,7 +377,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 			case "exists": // do nothing
 			default:
 				slog.Error(upErr.Error())
-				http.Error(w, "POST() error "+upErr.Error(), http.StatusInternalServerError)
+				errorMessage.ErrorResponse(w, "POST() error "+upErr.Error(), http.StatusInternalServerError)
 				return
 			}
 
@@ -396,8 +395,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 	if err != nil {
 		// This should never happen
 		slog.Error("Post: error marshaling", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
-		return
+		errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 	}
 
 	// Success: Construct response

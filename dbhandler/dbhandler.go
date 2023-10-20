@@ -107,7 +107,7 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 	} else if resc == paths.RESOURCE_DB {
 		slog.Info("Bad syntax for PUT database", "path", r.URL.Path)
 		msg := fmt.Sprintf("Bad syntax for PUT database")
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 		return
 	} else if resc <= 0 {
 		paths.HandlePathError(w, r, resc)
