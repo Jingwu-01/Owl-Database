@@ -334,6 +334,12 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 
 // Handles a POST request to this collection.
 func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc interfaces.IDocument) {
+	postdoc, canPost := interface{}(newDoc).(interfaces.Postable)
+	if !canPost {
+		errorMessage.ErrorResponse(w, "Document does not support posting", http.StatusInternalServerError)
+		return
+	}
+
 	// Upsert for post
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
@@ -351,6 +357,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 				c.NotifySubscribersUpdate(updateMSG, key)
 			}()
 
+			postdoc.AddNameToPath(key)
 			return newDoc, nil
 		}
 	}

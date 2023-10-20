@@ -118,6 +118,11 @@ func (d *Document) OverwriteBody(docBody interface{}, name string) {
 	d.children = &newChildren
 }
 
+// Required for POST case.
+func (d *Document) AddNameToPath(name string) {
+	d.output.Path = d.output.Path + name
+}
+
 // Applys a slice of patches to this document.
 // Returns a PatchResponse without the Uri field
 // set, expecting it to be set by caller.

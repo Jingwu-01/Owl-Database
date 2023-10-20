@@ -102,3 +102,9 @@ type Overwriteable interface {
 	// Overwrite the body of a document upon recieving a put or patch.
 	OverwriteBody(docBody interface{}, name string)
 }
+
+// A postable object supports posting
+type Postable interface {
+	// Insert name to the end of the path string
+	AddNameToPath(name string)
+}
