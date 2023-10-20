@@ -84,7 +84,7 @@ func (d *Dbhandler) get(w http.ResponseWriter, r *http.Request) {
 	case paths.RESOURCE_DB:
 		d.getCollection(w, r, coll)
 	case paths.RESOURCE_COLL:
-		coll.GetCollection(w, r)
+		coll.GetDocuments(w, r)
 	case paths.RESOURCE_DOC:
 		doc.GetDocument(w, r)
 	default:
@@ -136,7 +136,12 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 	case paths.RESOURCE_DOC:
 		// PUT collection (in document)
 		coll := collection.New()
-		doc.PutCollection(w, r, newName, &coll)
+		colhold, hasCollection := interface{}(doc).(interfaces.ICollectionHolder)
+		if hasCollection {
+			colhold.PutCollection(w, r, newName, &coll)
+		} else {
+			paths.HandlePathError(w, r, resc)
+		}
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
@@ -170,7 +175,12 @@ func (d *Dbhandler) delete(w http.ResponseWriter, r *http.Request) {
 		coll.DeleteDocument(w, r, newName)
 	case paths.RESOURCE_DOC:
 		// delete a collection from a document
-		doc.DeleteCollection(w, r, newName)
+		colhold, hasCollection := interface{}(doc).(interfaces.ICollectionHolder)
+		if hasCollection {
+			colhold.DeleteCollection(w, r, newName)
+		} else {
+			paths.HandlePathError(w, r, resc)
+		}
 	default:
 		paths.HandlePathError(w, r, resc)
 	}
@@ -227,7 +237,7 @@ func (d *Dbhandler) patch(w http.ResponseWriter, r *http.Request, name string) {
 // Specific handler for GET database (get a collection of documents from a database)
 func (d *Dbhandler) getCollection(w http.ResponseWriter, r *http.Request, coll interfaces.ICollection) {
 	// Same behavior as collection for now
-	coll.GetCollection(w, r)
+	coll.GetDocuments(w, r)
 }
 
 // Specific handler for PUT database (create a new database)

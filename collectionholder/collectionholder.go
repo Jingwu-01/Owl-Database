@@ -90,6 +90,6 @@ func (c *CollectionHolder) DeleteCollection(w http.ResponseWriter, r *http.Reque
 }
 
 // Find a collection in this collection holder.
-func (c *CollectionHolder) FindCollection(resource string) (coll interfaces.ICollection, found bool) {
+func (c *CollectionHolder) GetCollection(resource string) (coll interfaces.ICollection, found bool) {
 	return c.collections.Find(resource)
 }

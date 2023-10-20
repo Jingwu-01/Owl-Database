@@ -98,7 +98,7 @@ func (d *Document) DeleteCollection(w http.ResponseWriter, r *http.Request, newN
 
 // Finds a collection in this document for other methods.
 func (d *Document) GetCollection(resource string) (interfaces.ICollection, bool) {
-	return d.children.FindCollection(resource)
+	return d.children.GetCollection(resource)
 }
 
 // Overwrite the body of a document upon recieving a put or patch.
@@ -187,7 +187,7 @@ func (d *Document) GetRawBody() interface{} {
 }
 
 // Gets the JSON Document that this document stores.
-func (d *Document) GetDoc() interface{} {
+func (d *Document) GetJSONDoc() interface{} {
 	return d.output.Doc
 }
 

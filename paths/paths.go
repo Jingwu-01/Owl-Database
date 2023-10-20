@@ -106,13 +106,16 @@ func GetResourceFromPath(request string, root interfaces.ICollectionHolder) (int
 		// Change behaviors depending on iteration
 		if i == 0 {
 			// Database
-			lastColl, found = root.FindCollection(resource)
+			lastColl, found = root.GetCollection(resource)
 		} else if i%2 == 1 {
 			// Document
 			lastDoc, found = lastColl.FindDocument(resource)
 		} else if i > 0 && i%2 == 0 {
 			// Collection
-			lastColl, found = lastDoc.GetCollection(resource)
+			colhold, hasCollection := interface{}(lastDoc).(interfaces.ICollectionHolder)
+			if hasCollection {
+				lastColl, found = colhold.GetCollection(resource)
+			}
 		}
 
 		if !found {

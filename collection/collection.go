@@ -37,7 +37,7 @@ func New() Collection {
 }
 
 // Handles a GET request which pointed to this collection.
-func (c *Collection) GetCollection(w http.ResponseWriter, r *http.Request) {
+func (c *Collection) GetDocuments(w http.ResponseWriter, r *http.Request) {
 	// Get queries
 	queries := r.URL.Query()
 	interval := getInterval(queries.Get("interval"))
@@ -122,16 +122,23 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 	// Upsert for document; update if found, otherwise create new
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
+			docmeta, hasMeta := interface{}(currValue).(interfaces.HasMetadata)
+			docoverwrite, canOverwrite := interface{}(currValue).(interfaces.Overwriteable)
+
+			if !hasMeta || !canOverwrite {
+				return nil, errors.New("badoverwrite")
+			}
+
 			// Conditional put
-			matchOld := timeStamp == currValue.GetLastModified()
+			matchOld := timeStamp == docmeta.GetLastModified()
 			if timeStamp != -1 && !matchOld {
-				return nil, errors.New("bad timestamp match")
+				return nil, errors.New("badtimestamp")
 			}
 
 			// Modify metadata
-			currValue.OverwriteBody(newDoc.GetDoc(), newDoc.GetOriginalAuthor())
+			docoverwrite.OverwriteBody(newDoc.GetJSONDoc(), docmeta.GetOriginalAuthor())
 
-			updateMSG, err := currValue.GetJSONBody()
+			updateMSG, err := json.Marshal(currValue.GetRawBody())
 			if err != nil {
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 				return nil, err
@@ -151,9 +158,9 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 			return currValue, nil
 		} else {
 			// Create new document
-			updateMSG, err := newDoc.GetJSONBody()
+			updateMSG, err := json.Marshal(newDoc.GetRawBody())
 			if err != nil {
-				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+				http.Error(w, `"PutDocument: error marshalling"`, http.StatusInternalServerError)
 				return nil, errors.New("marshalling error")
 			}
 
@@ -169,10 +176,13 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 	updated, err := c.documents.Upsert(path, docUpsert)
 	if err != nil {
 		switch err.Error() {
-		case "Bad timestamp":
+		case "badtimestamp":
 			// TODO: error code for timestamp
 			slog.Error(err.Error())
 			http.Error(w, "PUT: bad timestamp", http.StatusNotFound)
+		case "badoverwrite":
+			slog.Error(err.Error())
+			http.Error(w, "PUT: overwrite not supported", http.StatusBadRequest)
 		default:
 			slog.Error(err.Error())
 			http.Error(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
@@ -253,8 +263,16 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 		return
 	}
 
+	// Check if patchable
+	patcher, canPatch := interface{}(doc).(interfaces.Patchable)
+	if !canPatch {
+		slog.Error("Patch document: document can't patch", "error", err)
+		http.Error(w, `"invalid patch document format"`, http.StatusBadRequest)
+		return
+	}
+
 	// Apply the patches to the document
-	patchreply, newdoc := doc.ApplyPatches(patches, schema)
+	patchreply, newdoc := patcher.ApplyPatches(patches, schema)
 	patchreply.Uri = r.URL.Path
 
 	// Marshal it into a json reply
@@ -268,9 +286,9 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 
 	if !patchreply.PatchFailed {
 		// Need to modify metadata
-		doc.OverwriteBody(newdoc, name)
+		patcher.OverwriteBody(newdoc, name)
 
-		updateMSG, err := doc.GetJSONBody()
+		updateMSG, err := json.Marshal(doc.GetRawBody())
 		if err != nil {
 			http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 			return
@@ -324,7 +342,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 			// Return error
 			return nil, errors.New("exists")
 		} else {
-			updateMSG, err := newDoc.GetJSONBody()
+			updateMSG, err := json.Marshal(newDoc.GetRawBody())
 			if err != nil {
 				http.Error(w, `"internal server error"`, http.StatusInternalServerError)
 				return nil, errors.New("marshalling error")
