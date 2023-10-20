@@ -83,6 +83,8 @@ func generateToken() (string, error) {
 // ValidateToken tells if a token in a request is valid. Returns
 // true and the corresponding username if so, else writes an error to the input response writer.
 func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string) {
+	w.Header().Set("Content-Type", "application/json")
+
 	// Check if the token is missing
 	authValue := r.Header.Get("Authorization")
 	parts := strings.Split(authValue, " ")
