@@ -1,3 +1,6 @@
+// Package collectionholder contains a struct
+// and several methods for manipulating a collection
+// of collections, internally represented as a skiplist.
 package collectionholder
 
 import (

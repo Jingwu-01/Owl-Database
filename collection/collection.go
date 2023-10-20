@@ -1,3 +1,5 @@
+// Package Collection contains a struct and methods
+// for implementing collections according to owlDB specifications.
 package collection
 
 import (
