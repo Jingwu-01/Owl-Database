@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
 )
 
@@ -62,7 +63,7 @@ func (a *Authenticator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// If user used method we do not support.
 		slog.Info("User used unsupported method", "method", r.Method)
 		msg := fmt.Sprintf("unsupported method: %s", r.Method)
-		http.Error(w, msg, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 	}
 }
 
@@ -90,7 +91,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 	if len(parts) != 2 || parts[0] != "Bearer" || parts[1] == "" {
 		// Missing or malformed bearer token
 		slog.Info("ValidateToken: missing or malformed bearer token", "token", authValue)
-		http.Error(w, `"Missing or malformed bearer token"`, http.StatusUnauthorized)
+		errorMessage.ErrorResponse(w, "Missing or malformed bearer token", http.StatusUnauthorized)
 		return false, ""
 	}
 
@@ -102,7 +103,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 		if !userInfo.(sessionInfo).expiresAt.After(time.Now()) {
 			// token has expired
 			slog.Info("ValidateToken: token has expired")
-			http.Error(w, `"Expired bearer token"`, http.StatusUnauthorized)
+			errorMessage.ErrorResponse(w, "Expired bearer token", http.StatusUnauthorized)
 			return false, ""
 		} else {
 			// token is valid
@@ -111,7 +112,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 	} else {
 		// token does not exist
 		slog.Info("ValidateToken: token does not exist")
-		http.Error(w, `"Invalid bearer token"`, http.StatusUnauthorized)
+		errorMessage.ErrorResponse(w, "Invalid bearer token", http.StatusUnauthorized)
 		return false, ""
 	}
 }
@@ -127,14 +128,14 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		slog.Error("Login: error reading the request body", "error", err)
-		http.Error(w, `"error reading the login request body"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "error reading the login request body", http.StatusBadRequest)
 		return
 	}
 	var userInfo map[string]string
 	err = json.Unmarshal(desc, &userInfo)
 	if err != nil {
 		slog.Error("Login: error unmarshaling request", "error", err)
-		http.Error(w, `"error unmarshaling login request"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "error unmarshaling login request", http.StatusBadRequest)
 		return
 	}
 
@@ -142,7 +143,7 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	username := userInfo["username"]
 	if username == "" {
 		slog.Info("Login: no username in request body")
-		http.Error(w, `"No username in request body"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "No username in request body", http.StatusBadRequest)
 		return
 	}
 
@@ -151,7 +152,7 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// This should never happen
 		slog.Error("Login: token not successfully generated", "error", err)
-		http.Error(w, `"Login: token not successfully generated"`, http.StatusInternalServerError)
+		errorMessage.ErrorResponse(w, "Login: token not successfully generated", http.StatusInternalServerError)
 		return
 	}
 
@@ -163,7 +164,7 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// This should never happen
 		slog.Error("Login: error marshaling", "error", err)
-		http.Error(w, `"error marshaling token"`, http.StatusInternalServerError)
+		errorMessage.ErrorResponse(w, "error marshaling token", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
