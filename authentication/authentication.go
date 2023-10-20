@@ -90,7 +90,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 	if len(parts) != 2 || parts[0] != "Bearer" || parts[1] == "" {
 		// Missing or malformed bearer token
 		slog.Info("ValidateToken: missing or malformed bearer token", "token", authValue)
-		http.Error(w, "Missing or malformed bearer token", http.StatusUnauthorized)
+		http.Error(w, `"Missing or malformed bearer token"`, http.StatusUnauthorized)
 		return false, ""
 	}
 
@@ -102,7 +102,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 		if !userInfo.(sessionInfo).expiresAt.After(time.Now()) {
 			// token has expired
 			slog.Info("ValidateToken: token has expired")
-			http.Error(w, "Expired bearer token", http.StatusUnauthorized)
+			http.Error(w, `"Expired bearer token"`, http.StatusUnauthorized)
 			return false, ""
 		} else {
 			// token is valid
@@ -111,7 +111,7 @@ func (a *Authenticator) ValidateToken(w http.ResponseWriter, r *http.Request) (b
 	} else {
 		// token does not exist
 		slog.Info("ValidateToken: token does not exist")
-		http.Error(w, "Invalid bearer token", http.StatusUnauthorized)
+		http.Error(w, `"Invalid bearer token"`, http.StatusUnauthorized)
 		return false, ""
 	}
 }
@@ -127,7 +127,7 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		slog.Error("Login: error reading the request body", "error", err)
-		http.Error(w, "error reading the login request body", http.StatusBadRequest)
+		http.Error(w, `"error reading the login request body"`, http.StatusBadRequest)
 		return
 	}
 	var userInfo map[string]string
@@ -142,15 +142,16 @@ func (a *Authenticator) login(w http.ResponseWriter, r *http.Request) {
 	username := userInfo["username"]
 	if username == "" {
 		slog.Info("Login: no username in request body")
-		http.Error(w, "No username in request body", http.StatusBadRequest)
+		http.Error(w, `"No username in request body"`, http.StatusBadRequest)
 		return
 	}
 
 	// Generate a cryptographically secure, random token
 	token, err := generateToken()
 	if err != nil {
+		// This should never happen
 		slog.Error("Login: token not successfully generated", "error", err)
-		http.Error(w, "Login: token not successfully generated", http.StatusInternalServerError)
+		http.Error(w, `"Login: token not successfully generated"`, http.StatusInternalServerError)
 		return
 	}
 
@@ -182,10 +183,9 @@ func (a *Authenticator) logout(w http.ResponseWriter, r *http.Request) {
 		authValue := r.Header.Get("Authorization")
 		parts := strings.Split(authValue, " ")
 		token := parts[1]
-
 		a.sessions.Delete(token)
-		w.WriteHeader(http.StatusNoContent)
 
+		w.WriteHeader(http.StatusNoContent)
 		slog.Info("Logout: user is successfully removed", "token", token)
 	}
 }
