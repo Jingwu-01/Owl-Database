@@ -1,4 +1,5 @@
-// Package interfaces contains interfaces of common data structures.
+// Package interfaces contains interfaces of common data structures
+// and optional behaviors of those data structures.
 package interfaces
 
 import (
@@ -63,28 +64,41 @@ type ICollectionHolder interface {
 // An authenticator is something which can validate a login token
 // as a valid user of a dbhandler or not.
 type Authenticator interface {
+	// ValidateToken tells if a token in a request is valid. Returns
+	// true and the corresponding username if so, else writes an error to the input response writer.
 	ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string)
 }
 
 // A subscribable object allows the sending of messages to subscribers.
 type Subscribable interface {
+	// Notifies subscribers of update messages.
 	NotifySubscribersUpdate(msg []byte, intervalComp string)
+
+	// Notifies subscribers of delete messages.
 	NotifySubscribersDelete(msg string, intervalComp string)
 }
 
 // A HasMetadata object allows storage and public retrieval of metadata
 type HasMetadata interface {
+	// Gets the original author of this document
 	GetOriginalAuthor() string
+
+	// Gets the last modified at field from
+	// this document for conditional put.
 	GetLastModified() int64
 }
 
 // A Patchable object allows patching
 type Patchable interface {
+	// Applys a slice of patches to this document.
 	ApplyPatches(patches []patcher.Patch, schema *jsonschema.Schema) (structs.PatchResponse, interface{})
+
+	// Overwrite the body of a document upon recieving a put or patch.
 	OverwriteBody(docBody interface{}, name string)
 }
 
 // A overwritable object allows being overwritten
 type Overwriteable interface {
+	// Overwrite the body of a document upon recieving a put or patch.
 	OverwriteBody(docBody interface{}, name string)
 }
