@@ -31,7 +31,7 @@ func (c *CollectionHolder) PutCollection(w http.ResponseWriter, r *http.Request,
 	// Define the upsert method - only create a new collection
 	dbUpsert := func(key string, currValue interfaces.ICollection, exists bool) (interfaces.ICollection, error) {
 		if exists {
-			return nil, errors.New("database already exists")
+			return nil, errors.New("db exist")
 		} else {
 			return newColl, nil
 		}
@@ -42,8 +42,8 @@ func (c *CollectionHolder) PutCollection(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		slog.Error(err.Error())
 		switch err.Error() {
-		case "Database already exists":
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		case "db exist":
+			http.Error(w, "Database already exists", http.StatusBadRequest)
 		default:
 			http.Error(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
 		}
