@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collectionholder"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
@@ -65,7 +66,7 @@ func (d *Document) GetDocument(w http.ResponseWriter, r *http.Request) {
 	// Convert to JSON and send
 	jsonDoc, err := d.GetJSONBody()
 	if err != nil {
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/collection"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/document"
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/options"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/paths"
@@ -71,7 +72,7 @@ func (d *Dbhandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// If user used method we do not support.
 				slog.Info("User used unsupported method", "method", r.Method)
 				msg := fmt.Sprintf("unsupported method: %s", r.Method)
-				http.Error(w, msg, http.StatusBadRequest)
+				errorMessage.ErrorResponse(w, msg, http.StatusBadRequest)
 			}
 		}
 	}
@@ -265,7 +266,7 @@ func (d *Dbhandler) createDocument(w http.ResponseWriter, r *http.Request, name 
 	defer r.Body.Close()
 	if err != nil {
 		slog.Error("Post document: error reading the document request body", "error", err)
-		http.Error(w, `"invalid document format"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "invalid document format", http.StatusBadRequest)
 		return zero, err
 	}
 
@@ -274,7 +275,7 @@ func (d *Dbhandler) createDocument(w http.ResponseWriter, r *http.Request, name 
 	err = json.Unmarshal(desc, &docBody)
 	if err != nil {
 		slog.Error("createReplaceDocument: error unmarshaling Post document request", "error", err)
-		http.Error(w, `"invalid Post document format"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "invalid Post document format", http.StatusBadRequest)
 		return zero, err
 	}
 
@@ -282,7 +283,7 @@ func (d *Dbhandler) createDocument(w http.ResponseWriter, r *http.Request, name 
 	err = d.schema.Validate(docBody)
 	if err != nil {
 		slog.Error("Post document: document did not conform to schema", "error", err)
-		http.Error(w, `"document did not conform to schema"`, http.StatusBadRequest)
+		errorMessage.ErrorResponse(w, "document did not conform to schema", http.StatusBadRequest)
 		return zero, err
 	}
 
