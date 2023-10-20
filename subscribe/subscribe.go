@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 )
 
 // A write flusher is an interface to allow for
@@ -76,8 +78,8 @@ func (s Subscriber) ServeSubscriber(w http.ResponseWriter, r *http.Request) {
 	// Convert ResponseWriter to a writeFlusher
 	wf, ok := w.(writeFlusher)
 	if !ok {
-		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		slog.Info("Couldn't convert to write flusher")
+		errorMessage.ErrorResponse(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
 
