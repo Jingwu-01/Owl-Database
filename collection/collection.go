@@ -139,16 +139,13 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 
 			go func() {
 				// Notify doc subscribers
-				for _, sub := range currValue.GetSubscribers() {
-					sub.UpdateCh <- updateMSG
+				docsub, ok := interface{}(currValue).(interfaces.Subscribable)
+				if ok {
+					docsub.NotifySubscribersUpdate(updateMSG, "")
 				}
 
 				// Notify collection subscribers
-				for _, sub := range c.subscribers {
-					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
-						sub.Subscriber.UpdateCh <- updateMSG
-					}
-				}
+				c.NotifySubscribersUpdate(updateMSG, key)
 			}()
 
 			return currValue, nil
@@ -162,11 +159,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 
 			go func() {
 				// Notify collection subscribers
-				for _, sub := range c.subscribers {
-					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
-						sub.Subscriber.UpdateCh <- updateMSG
-					}
-				}
+				c.NotifySubscribersUpdate(updateMSG, key)
 			}()
 
 			return newDoc, nil
@@ -213,16 +206,13 @@ func (c *Collection) DeleteDocument(w http.ResponseWriter, r *http.Request, docp
 
 	go func() {
 		// Notify doc subscribers
-		for _, sub := range doc.GetSubscribers() {
-			sub.DeleteCh <- r.URL.Path
+		docsub, ok := interface{}(doc).(interfaces.Subscribable)
+		if ok {
+			docsub.NotifySubscribersDelete(r.URL.Path, "")
 		}
 
 		// Notify collection subscribers
-		for _, sub := range c.subscribers {
-			if docpath >= sub.IntervalStart && docpath <= sub.IntervalEnd {
-				sub.Subscriber.DeleteCh <- r.URL.Path
-			}
-		}
+		c.NotifySubscribersDelete(r.URL.Path, docpath)
 	}()
 
 	slog.Info("Deleted Document", "path", r.URL.Path)
@@ -288,16 +278,13 @@ func (c *Collection) PatchDocument(w http.ResponseWriter, r *http.Request, docpa
 
 		go func() {
 			// Notify doc subscribers
-			for _, sub := range doc.GetSubscribers() {
-				sub.UpdateCh <- updateMSG
+			docsub, ok := interface{}(doc).(interfaces.Subscribable)
+			if ok {
+				docsub.NotifySubscribersUpdate(updateMSG, "")
 			}
 
 			// Notify collection subscribers
-			for _, sub := range c.subscribers {
-				if docpath >= sub.IntervalStart && docpath <= sub.IntervalEnd {
-					sub.Subscriber.UpdateCh <- updateMSG
-				}
-			}
+			c.NotifySubscribersUpdate(updateMSG, docpath)
 		}()
 
 		// Upsert to reinsert
@@ -345,11 +332,7 @@ func (c *Collection) PostDocument(w http.ResponseWriter, r *http.Request, newDoc
 
 			go func() {
 				// Notify collection subscribers
-				for _, sub := range c.subscribers {
-					if key >= sub.IntervalStart && key <= sub.IntervalEnd {
-						sub.Subscriber.UpdateCh <- updateMSG
-					}
-				}
+				c.NotifySubscribersUpdate(updateMSG, key)
 			}()
 
 			return newDoc, nil
@@ -411,11 +394,6 @@ func (c *Collection) FindDocument(resource string) (interfaces.IDocument, bool) 
 	return c.documents.Find(resource)
 }
 
-// Gets the subscribers to this collection.
-func (c *Collection) GetSubscribers() []structs.CollSub {
-	return c.subscribers
-}
-
 /*
 Convert a string representing string intervals into the elements inside the interval.
 
@@ -450,4 +428,24 @@ func getInterval(intervalStr string) [2]string {
 
 	slog.Info("GetInterval: Good interval", "arg[0]", interval[0], "arg[1]", interval[1])
 	return interval
+}
+
+// Implements Subscribable method. Notifies subscribers of update messages.
+// Uses interval.
+func (c *Collection) NotifySubscribersUpdate(msg []byte, intervalComp string) {
+	for _, sub := range c.subscribers {
+		if intervalComp == "" || (intervalComp >= sub.IntervalStart && intervalComp <= sub.IntervalEnd) {
+			sub.Subscriber.UpdateCh <- msg
+		}
+	}
+}
+
+// Implements Subscribable method. Notifies subscribers of delete messages.
+// Uses interval.
+func (c *Collection) NotifySubscribersDelete(msg string, intervalComp string) {
+	for _, sub := range c.subscribers {
+		if intervalComp == "" || (intervalComp >= sub.IntervalStart && intervalComp <= sub.IntervalEnd) {
+			sub.Subscriber.DeleteCh <- msg
+		}
+	}
 }

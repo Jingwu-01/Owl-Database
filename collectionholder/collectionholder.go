@@ -78,8 +78,10 @@ func (c *CollectionHolder) DeleteCollection(w http.ResponseWriter, r *http.Reque
 
 	// Notify subscribers
 	// Notify collection subscribers
-	for _, sub := range col.GetSubscribers() {
-		sub.Subscriber.DeleteCh <- r.URL.Path
+	// TODO: does not use interval?
+	colsub, ok := interface{}(col).(interfaces.Subscribable)
+	if ok {
+		colsub.NotifySubscribersDelete(r.URL.Path, "")
 	}
 
 	slog.Info("Deleted Collection", "path", r.URL.Path)

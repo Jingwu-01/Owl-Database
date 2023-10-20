@@ -76,7 +76,7 @@ func (d *Document) GetDocument(w http.ResponseWriter, r *http.Request) {
 		subscriber := subscribe.New()
 		d.subscribers = append(d.subscribers, subscriber)
 		go func() {
-			subscriber.UpdateCh <- jsonDoc
+			d.NotifySubscribersUpdate(jsonDoc, "")
 		}()
 		subscriber.ServeSubscriber(w, r)
 	} else {
@@ -191,7 +191,18 @@ func (d *Document) GetDoc() interface{} {
 	return d.output.Doc
 }
 
-// Gets the subscribers to this document.
-func (d *Document) GetSubscribers() []subscribe.Subscriber {
-	return d.subscribers
+// Implements Subscribable method. Notifies subscribers of update messages.
+// Does not use interval.
+func (d *Document) NotifySubscribersUpdate(msg []byte, intervalComp string) {
+	for _, sub := range d.subscribers {
+		sub.UpdateCh <- msg
+	}
+}
+
+// Implements Subscribable method. Notifies subscribers of update messages.
+// Does not use interval.
+func (d *Document) NotifySubscribersDelete(msg string, intervalComp string) {
+	for _, sub := range d.subscribers {
+		sub.DeleteCh <- msg
+	}
 }

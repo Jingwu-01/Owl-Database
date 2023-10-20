@@ -6,7 +6,6 @@ import (
 
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/patcher"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
-	"github.com/RICE-COMP318-FALL23/owldb-p1group20/subscribe"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
@@ -25,7 +24,6 @@ type IDocument interface {
 	GetJSONBody() ([]byte, error)
 	GetRawBody() interface{}
 	GetDoc() interface{}
-	GetSubscribers() []subscribe.Subscriber
 }
 
 // The interface of a collection.
@@ -38,7 +36,6 @@ type ICollection interface {
 	PatchDocument(w http.ResponseWriter, r *http.Request, docpath string, schema *jsonschema.Schema, name string)
 	PostDocument(w http.ResponseWriter, r *http.Request, newDoc IDocument)
 	FindDocument(resource string) (IDocument, bool)
-	GetSubscribers() []structs.CollSub
 }
 
 // The interface of a collection holder.
@@ -54,4 +51,10 @@ type ICollectionHolder interface {
 // as a valid user of a dbhandler or not.
 type Authenticator interface {
 	ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string)
+}
+
+// A subscribable object allows the sending of messages to subscribers.
+type Subscribable interface {
+	NotifySubscribersUpdate(msg []byte, intervalComp string)
+	NotifySubscribersDelete(msg string, intervalComp string)
 }
