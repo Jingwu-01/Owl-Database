@@ -19,23 +19,17 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
-// An authenticator is something which can validate a login token
-// as a valid user of a dbhandler or not.
-type Authenticator interface {
-	ValidateToken(w http.ResponseWriter, r *http.Request) (bool, string)
-}
-
 // A dbhandler is the highest level struct, holds all the
 // base level databases as well as the schema and map of
 // usernames to authentication tokens.
 type Dbhandler struct {
 	databases     interfaces.ICollectionHolder // The set of databases held by this handler.
 	schema        *jsonschema.Schema           // The schema documents in this database must conform to.
-	authenticator Authenticator                // An authenticator for user validation.
+	authenticator interfaces.Authenticator     // An authenticator for user validation.
 }
 
 // Creates a new DBHandler
-func New(holder interfaces.ICollectionHolder, schema *jsonschema.Schema, authenticator Authenticator) Dbhandler {
+func New(holder interfaces.ICollectionHolder, schema *jsonschema.Schema, authenticator interfaces.Authenticator) Dbhandler {
 	return Dbhandler{holder, schema, authenticator}
 }
 
@@ -110,7 +104,9 @@ func (d *Dbhandler) put(w http.ResponseWriter, r *http.Request, username string)
 		d.putDatabase(w, r, newName)
 		return
 	} else if resc == paths.RESOURCE_DB {
-		paths.CustomPathError(w, r, "Bad syntax for PUT database (extra slash)", http.StatusBadRequest)
+		slog.Info("Bad syntax for PUT database", "path", r.URL.Path)
+		msg := fmt.Sprintf("Bad syntax for PUT database")
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	} else if resc <= 0 {
 		paths.HandlePathError(w, r, resc)

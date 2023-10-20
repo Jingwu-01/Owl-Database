@@ -101,7 +101,7 @@ func (d *Document) GetCollection(resource string) (interfaces.ICollection, bool)
 }
 
 // Overwrite the body of a document upon recieving a put or patch.
-func (d *Document) Overwrite(docBody interface{}, name string) {
+func (d *Document) OverwriteBody(docBody interface{}, name string) {
 	existingDocOutput := d.output
 	existingDocOutput.Meta.LastModifiedAt = time.Now().UnixMilli()
 	existingDocOutput.Meta.LastModifiedBy = name

@@ -201,15 +201,6 @@ func CutRequest(request string) (truncatedRequest string, resourceName string, r
 	return request, resName, finalRes
 }
 
-// A generic error handler that logs the error and sends a message to the client.
-//
-// Intended to log a more specific message and/or changed error code.
-func CustomPathError(w http.ResponseWriter, r *http.Request, message string, code int) {
-	slog.Info(message, "path", r.URL.Path)
-	msg := fmt.Sprintf(message)
-	http.Error(w, msg, code)
-}
-
 // Generic path error handler.
 //
 // For a given result code, logs the error and sends a predefined message to the client.
