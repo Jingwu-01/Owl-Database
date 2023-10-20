@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/RICE-COMP318-FALL23/owldb-p1group20/errorMessage"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/interfaces"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/skiplist"
 	"github.com/RICE-COMP318-FALL23/owldb-p1group20/structs"
@@ -43,9 +44,9 @@ func (c *CollectionHolder) PutCollection(w http.ResponseWriter, r *http.Request,
 		slog.Error(err.Error())
 		switch err.Error() {
 		case "db exist":
-			http.Error(w, "Database already exists", http.StatusBadRequest)
+			errorMessage.ErrorResponse(w, "Database already exists", http.StatusBadRequest)
 		default:
-			http.Error(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
+			errorMessage.ErrorResponse(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -55,7 +56,7 @@ func (c *CollectionHolder) PutCollection(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		// This should never happen
 		slog.Error("PUT: marshal error", "error", err)
-		http.Error(w, `"internal server error"`, http.StatusInternalServerError)
+		errorMessage.ErrorResponse(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	slog.Info("Created Database", "path", dbpath)
