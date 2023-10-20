@@ -97,7 +97,6 @@ func (c *Collection) GetDocuments(w http.ResponseWriter, r *http.Request) {
 
 // Handles a put request which points to this collection.
 func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path string, newDoc interfaces.IDocument) {
-
 	// Marshal
 	jsonResponse, err := json.Marshal(structs.PutOutput{Uri: r.URL.Path})
 	if err != nil {
@@ -176,9 +175,8 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 	if err != nil {
 		switch err.Error() {
 		case "badtimestamp":
-			// TODO: error code for timestamp
 			slog.Error(err.Error())
-			errorMessage.ErrorResponse(w, "PUT: bad timestamp", http.StatusNotFound)
+			errorMessage.ErrorResponse(w, "PUT: bad timestamp", http.StatusBadRequest)
 		case "badoverwrite":
 			slog.Error(err.Error())
 			errorMessage.ErrorResponse(w, "PUT: overwrite not supported", http.StatusBadRequest)
@@ -186,6 +184,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 			slog.Error(err.Error())
 			errorMessage.ErrorResponse(w, "PUT() error "+err.Error(), http.StatusInternalServerError)
 		}
+		return
 	}
 
 	// Success: Construct response
