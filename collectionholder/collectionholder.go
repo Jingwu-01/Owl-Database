@@ -73,7 +73,7 @@ func (c *CollectionHolder) DeleteCollection(w http.ResponseWriter, r *http.Reque
 	// Handle response
 	if !deleted {
 		slog.Info("Collection does not exist", "path", r.URL.Path)
-		w.WriteHeader(http.StatusNotFound)
+		errorMessage.ErrorResponse(w, "collectio/database does not exist", http.StatusNotFound)
 		return
 	}
 
