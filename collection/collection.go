@@ -120,7 +120,7 @@ func (c *Collection) PutDocument(w http.ResponseWriter, r *http.Request, path st
 	// Upsert for document; update if found, otherwise create new
 	docUpsert := func(key string, currValue interfaces.IDocument, exists bool) (interfaces.IDocument, error) {
 		if exists {
-			docmeta, hasMeta := interface{}(currValue).(interfaces.HasMetadata)
+			docmeta, hasMeta := interface{}(newDoc).(interfaces.HasMetadata)
 			docoverwrite, canOverwrite := interface{}(currValue).(interfaces.Overwriteable)
 
 			if !hasMeta || !canOverwrite {
